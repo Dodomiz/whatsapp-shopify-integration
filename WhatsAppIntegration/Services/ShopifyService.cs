@@ -445,6 +445,31 @@ public class ShopifyService : IShopifyService
             // Get all orders containing automation or dog extra products
             var allOrders = await GetOrdersByCustomerAsync(status, limit, minOrdersPerCustomer, allTargetProductIds, createdAtMin, createdAtMax);
             
+            // Create product tags lookup for faster access, handling potential duplicates
+            var productTagsLookup = new Dictionary<long, List<string>>();
+            
+            // Add automation products
+            foreach (var product in categorizedProducts.AutomationProducts)
+            {
+                productTagsLookup[product.Id] = product.TagsList;
+            }
+            
+            // Add dog extra products, merging tags if product already exists
+            foreach (var product in categorizedProducts.DogExtraProducts)
+            {
+                if (productTagsLookup.ContainsKey(product.Id))
+                {
+                    // Merge tags if product exists in both categories
+                    var existingTags = productTagsLookup[product.Id];
+                    var mergedTags = existingTags.Union(product.TagsList).Distinct().ToList();
+                    productTagsLookup[product.Id] = mergedTags;
+                }
+                else
+                {
+                    productTagsLookup[product.Id] = product.TagsList;
+                }
+            }
+            
             var response = new ShopifyCategorizedOrdersByCustomerResponse();
             
             // Categorize orders for each customer
@@ -466,8 +491,8 @@ public class ShopifyService : IShopifyService
                         .Select(item => item.ProductId!.Value)
                         .ToHashSet();
                     
-                    // Create order copy without customer information
-                    var orderWithoutCustomer = CreateOrderWithoutCustomer(order);
+                    // Create order copy without customer information and add product tags
+                    var orderWithoutCustomer = CreateOrderWithoutCustomer(order, productTagsLookup);
                     
                     // Check if order contains automation products
                     if (orderProductIds.Any(id => automationProductIds.Contains(id)))
@@ -482,7 +507,21 @@ public class ShopifyService : IShopifyService
                     }
                 }
                 
-                // Only include customers that have orders in at least one category
+                // Apply minOrdersPerCustomer filter to each category
+                if (minOrdersPerCustomer is > 0)
+                {
+                    if (categorizedOrders.AutomationProductsOrders.Count < minOrdersPerCustomer.Value)
+                    {
+                        categorizedOrders.AutomationProductsOrders.Clear();
+                    }
+                    
+                    if (categorizedOrders.DogExtraProductsOrders.Count < minOrdersPerCustomer.Value)
+                    {
+                        categorizedOrders.DogExtraProductsOrders.Clear();
+                    }
+                }
+                
+                // Only include customers that have orders in at least one category after filtering
                 if (categorizedOrders.TotalOrders > 0)
                 {
                     response.OrdersByCustomer[customerId] = categorizedOrders;
@@ -995,8 +1034,51 @@ public class ShopifyService : IShopifyService
         return query["page_info"];
     }
 
-    private static ShopifyOrder CreateOrderWithoutCustomer(ShopifyOrder order)
+    private static ShopifyOrder CreateOrderWithoutCustomer(ShopifyOrder order, Dictionary<long, List<string>>? productTagsLookup = null)
     {
+        var lineItemsWithTags = order.LineItems.Select(lineItem =>
+        {
+            var newLineItem = new ShopifyLineItem
+            {
+                Id = lineItem.Id,
+                AdminGraphqlApiId = lineItem.AdminGraphqlApiId,
+                FulfillableQuantity = lineItem.FulfillableQuantity,
+                FulfillmentService = lineItem.FulfillmentService,
+                FulfillmentStatus = lineItem.FulfillmentStatus,
+                GiftCard = lineItem.GiftCard,
+                Grams = lineItem.Grams,
+                Name = lineItem.Name,
+                Price = lineItem.Price,
+                PriceSet = lineItem.PriceSet,
+                ProductExists = lineItem.ProductExists,
+                ProductId = lineItem.ProductId,
+                Properties = lineItem.Properties,
+                Quantity = lineItem.Quantity,
+                RequiresShipping = lineItem.RequiresShipping,
+                Sku = lineItem.Sku,
+                Taxable = lineItem.Taxable,
+                Title = lineItem.Title,
+                TotalDiscount = lineItem.TotalDiscount,
+                TotalDiscountSet = lineItem.TotalDiscountSet,
+                VariantId = lineItem.VariantId,
+                VariantInventoryManagement = lineItem.VariantInventoryManagement,
+                VariantTitle = lineItem.VariantTitle,
+                Vendor = lineItem.Vendor,
+                TaxLines = lineItem.TaxLines,
+                Duties = lineItem.Duties,
+                DiscountAllocations = lineItem.DiscountAllocations
+            };
+
+            // Add product tags if available
+            if (productTagsLookup != null && lineItem.ProductId.HasValue && 
+                productTagsLookup.TryGetValue(lineItem.ProductId.Value, out var tags))
+            {
+                newLineItem.ProductTags = tags;
+            }
+
+            return newLineItem;
+        }).ToList();
+
         return new ShopifyOrder
         {
             Id = order.Id,
@@ -1010,7 +1092,7 @@ public class ShopifyService : IShopifyService
             Test = order.Test,
             TotalPrice = order.TotalPrice,
             UpdatedAt = order.UpdatedAt,
-            LineItems = order.LineItems,
+            LineItems = lineItemsWithTags,
             // Intentionally exclude Customer to avoid duplication
             Customer = null
         };
