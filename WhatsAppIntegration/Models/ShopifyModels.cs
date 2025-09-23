@@ -261,14 +261,14 @@ public class ShopifyLineItem
     [JsonPropertyName("fulfillable_quantity")]
     public int FulfillableQuantity { get; set; }
 
-    [JsonPropertyName("fulfillment_service")]
-    public string FulfillmentService { get; set; } = string.Empty;
-
-    [JsonPropertyName("fulfillment_status")]
-    public string? FulfillmentStatus { get; set; }
-
-    [JsonPropertyName("gift_card")]
-    public bool GiftCard { get; set; }
+    // [JsonPropertyName("fulfillment_service")]
+    // public string FulfillmentService { get; set; } = string.Empty;
+    //
+    // [JsonPropertyName("fulfillment_status")]
+    // public string? FulfillmentStatus { get; set; }
+    //
+    // [JsonPropertyName("gift_card")]
+    // public bool GiftCard { get; set; }
 
     [JsonPropertyName("grams")]
     public int Grams { get; set; }
@@ -279,29 +279,29 @@ public class ShopifyLineItem
     [JsonPropertyName("price")]
     public string Price { get; set; } = "0.00";
 
-    [JsonPropertyName("price_set")]
-    public ShopifyPriceSet? PriceSet { get; set; }
-
-    [JsonPropertyName("product_exists")]
-    public bool ProductExists { get; set; }
+    // [JsonPropertyName("price_set")]
+    // public ShopifyPriceSet? PriceSet { get; set; }
+    //
+    // [JsonPropertyName("product_exists")]
+    // public bool ProductExists { get; set; }
 
     [JsonPropertyName("product_id")]
     public long? ProductId { get; set; }
 
-    [JsonPropertyName("properties")]
-    public List<ShopifyProperty> Properties { get; set; } = new();
+    // [JsonPropertyName("properties")]
+    // public List<ShopifyProperty> Properties { get; set; } = new();
 
     [JsonPropertyName("quantity")]
     public int Quantity { get; set; }
 
-    [JsonPropertyName("requires_shipping")]
-    public bool RequiresShipping { get; set; }
-
-    [JsonPropertyName("sku")]
-    public string? Sku { get; set; }
-
-    [JsonPropertyName("taxable")]
-    public bool Taxable { get; set; }
+    // [JsonPropertyName("requires_shipping")]
+    // public bool RequiresShipping { get; set; }
+    //
+    // [JsonPropertyName("sku")]
+    // public string? Sku { get; set; }
+    //
+    // [JsonPropertyName("taxable")]
+    // public bool Taxable { get; set; }
 
     [JsonPropertyName("title")]
     public string Title { get; set; } = string.Empty;
@@ -309,8 +309,8 @@ public class ShopifyLineItem
     [JsonPropertyName("total_discount")]
     public string TotalDiscount { get; set; } = "0.00";
 
-    [JsonPropertyName("total_discount_set")]
-    public ShopifyPriceSet? TotalDiscountSet { get; set; }
+    // [JsonPropertyName("total_discount_set")]
+    // public ShopifyPriceSet? TotalDiscountSet { get; set; }
 
     [JsonPropertyName("variant_id")]
     public long? VariantId { get; set; }
@@ -324,14 +324,14 @@ public class ShopifyLineItem
     [JsonPropertyName("vendor")]
     public string? Vendor { get; set; }
 
-    [JsonPropertyName("tax_lines")]
-    public List<ShopifyTaxLine> TaxLines { get; set; } = new();
+    // [JsonPropertyName("tax_lines")]
+    // public List<ShopifyTaxLine> TaxLines { get; set; } = new();
 
-    [JsonPropertyName("duties")]
-    public List<object> Duties { get; set; } = new();
-
-    [JsonPropertyName("discount_allocations")]
-    public List<ShopifyDiscountAllocation> DiscountAllocations { get; set; } = new();
+    // [JsonPropertyName("duties")]
+    // public List<object> Duties { get; set; } = new();
+    //
+    // [JsonPropertyName("discount_allocations")]
+    // public List<ShopifyDiscountAllocation> DiscountAllocations { get; set; } = new();
 }
 
 /// <summary>
