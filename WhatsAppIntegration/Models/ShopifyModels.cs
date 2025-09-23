@@ -332,6 +332,9 @@ public class ShopifyLineItem
 
     [JsonPropertyName("discount_allocations")]
     public List<ShopifyDiscountAllocation> DiscountAllocations { get; set; } = new();
+
+    [JsonPropertyName("product_tags")]
+    public List<string> ProductTags { get; set; } = new();
 }
 
 /// <summary>

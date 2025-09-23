@@ -1073,5 +1073,218 @@ public class ShopifyServiceTests
         // Verify orders don't have customer information (to avoid duplication)
         result.OrdersByCustomer[123].AutomationProductsOrders[0].Customer.Should().BeNull();
         result.OrdersByCustomer[123].DogExtraProductsOrders[0].Customer.Should().BeNull();
+        
+        // Verify line items have product tags populated
+        result.OrdersByCustomer[123].AutomationProductsOrders[0].LineItems[0].ProductTags.Should().NotBeEmpty();
+        result.OrdersByCustomer[123].AutomationProductsOrders[0].LineItems[0].ProductTags.Should().Contain("includeAutomation");
+        result.OrdersByCustomer[123].DogExtraProductsOrders[0].LineItems[0].ProductTags.Should().NotBeEmpty();
+        result.OrdersByCustomer[123].DogExtraProductsOrders[0].LineItems[0].ProductTags.Should().Contain("dogExtra1");
+    }
+
+    [Fact]
+    public async Task GetCategorizedOrdersByCustomerAsync_WithProductInBothCategories_ShouldMergeTags()
+    {
+        // Arrange - Product with ID 100 appears in both categories with different tags
+        var products = new List<ShopifyProduct>
+        {
+            new() { Id = 100, Tags = "includeAutomation,shared-tag" },
+            new() { Id = 100, Tags = "dogExtra1,another-tag" }
+        };
+
+        var orders = new List<ShopifyOrder>
+        {
+            new() 
+            { 
+                Id = 1, 
+                Customer = new ShopifyCustomer { Id = 123 }, 
+                LineItems = new List<ShopifyLineItem> 
+                { 
+                    new() { ProductId = 100, Quantity = 1 } 
+                } 
+            }
+        };
+
+        var productResponseContent = JsonSerializer.Serialize(new ShopifyProductsResponse { Products = products });
+        var orderResponseContent = JsonSerializer.Serialize(new ShopifyOrdersResponse { Orders = orders });
+
+        _httpMessageHandlerMock
+            .Protected()
+            .SetupSequence<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(productResponseContent, Encoding.UTF8, "application/json")
+            })
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(orderResponseContent, Encoding.UTF8, "application/json")
+            });
+
+        // Act
+        var result = await _service.GetCategorizedOrdersByCustomerAsync();
+
+        // Assert
+        result.Should().NotBeNull();
+        result.OrdersByCustomer[123].AutomationProductsOrders.Should().HaveCount(1);
+        result.OrdersByCustomer[123].DogExtraProductsOrders.Should().HaveCount(1);
+        
+        // Verify tags are merged for the product that appears in both categories
+        var automationOrderLineItem = result.OrdersByCustomer[123].AutomationProductsOrders[0].LineItems[0];
+        var dogExtraOrderLineItem = result.OrdersByCustomer[123].DogExtraProductsOrders[0].LineItems[0];
+        
+        // Both line items should have the merged tags
+        automationOrderLineItem.ProductTags.Should().Contain("includeAutomation");
+        automationOrderLineItem.ProductTags.Should().Contain("dogExtra1");
+        automationOrderLineItem.ProductTags.Should().Contain("shared-tag");
+        automationOrderLineItem.ProductTags.Should().Contain("another-tag");
+        
+        dogExtraOrderLineItem.ProductTags.Should().Contain("includeAutomation");
+        dogExtraOrderLineItem.ProductTags.Should().Contain("dogExtra1");
+        dogExtraOrderLineItem.ProductTags.Should().Contain("shared-tag");
+        dogExtraOrderLineItem.ProductTags.Should().Contain("another-tag");
+    }
+
+    [Fact]
+    public async Task GetCategorizedOrdersByCustomerAsync_WithMinOrdersPerCustomer_ShouldFilterCategories()
+    {
+        // Arrange - Customer with 1 automation order and 2 dog extra orders
+        var products = new List<ShopifyProduct>
+        {
+            new() { Id = 100, Tags = "includeAutomation" },
+            new() { Id = 200, Tags = "dogExtra1" }
+        };
+
+        var orders = new List<ShopifyOrder>
+        {
+            // 1 automation order (will be filtered out with minOrdersPerCustomer = 2)
+            new() 
+            { 
+                Id = 1, 
+                Customer = new ShopifyCustomer { Id = 123 }, 
+                LineItems = new List<ShopifyLineItem> 
+                { 
+                    new() { ProductId = 100, Quantity = 1 } 
+                } 
+            },
+            // 2 dog extra orders (will be included with minOrdersPerCustomer = 2)
+            new() 
+            { 
+                Id = 2, 
+                Customer = new ShopifyCustomer { Id = 123 }, 
+                LineItems = new List<ShopifyLineItem> 
+                { 
+                    new() { ProductId = 200, Quantity = 1 } 
+                } 
+            },
+            new() 
+            { 
+                Id = 3, 
+                Customer = new ShopifyCustomer { Id = 123 }, 
+                LineItems = new List<ShopifyLineItem> 
+                { 
+                    new() { ProductId = 200, Quantity = 2 } 
+                } 
+            }
+        };
+
+        var productResponseContent = JsonSerializer.Serialize(new ShopifyProductsResponse { Products = products });
+        var orderResponseContent = JsonSerializer.Serialize(new ShopifyOrdersResponse { Orders = orders });
+
+        _httpMessageHandlerMock
+            .Protected()
+            .SetupSequence<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(productResponseContent, Encoding.UTF8, "application/json")
+            })
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(orderResponseContent, Encoding.UTF8, "application/json")
+            });
+
+        // Act
+        var result = await _service.GetCategorizedOrdersByCustomerAsync(minOrdersPerCustomer: 2);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.OrdersByCustomer.Should().ContainKey(123);
+        
+        // Automation orders should be empty (only 1 order, less than minOrdersPerCustomer = 2)
+        result.OrdersByCustomer[123].AutomationProductsOrders.Should().BeEmpty();
+        
+        // Dog extra orders should have 2 orders (meets minOrdersPerCustomer = 2)
+        result.OrdersByCustomer[123].DogExtraProductsOrders.Should().HaveCount(2);
+        
+        // Total counts should reflect the filtering
+        result.TotalAutomationOrders.Should().Be(0);
+        result.TotalDogExtraOrders.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task GetCategorizedOrdersByCustomerAsync_WithMinOrdersFiltersAllCategories_ShouldExcludeCustomer()
+    {
+        // Arrange - Customer with 1 automation order and 1 dog extra order (both will be filtered out)
+        var products = new List<ShopifyProduct>
+        {
+            new() { Id = 100, Tags = "includeAutomation" },
+            new() { Id = 200, Tags = "dogExtra1" }
+        };
+
+        var orders = new List<ShopifyOrder>
+        {
+            new() 
+            { 
+                Id = 1, 
+                Customer = new ShopifyCustomer { Id = 123 }, 
+                LineItems = new List<ShopifyLineItem> 
+                { 
+                    new() { ProductId = 100, Quantity = 1 } 
+                } 
+            },
+            new() 
+            { 
+                Id = 2, 
+                Customer = new ShopifyCustomer { Id = 123 }, 
+                LineItems = new List<ShopifyLineItem> 
+                { 
+                    new() { ProductId = 200, Quantity = 1 } 
+                } 
+            }
+        };
+
+        var productResponseContent = JsonSerializer.Serialize(new ShopifyProductsResponse { Products = products });
+        var orderResponseContent = JsonSerializer.Serialize(new ShopifyOrdersResponse { Orders = orders });
+
+        _httpMessageHandlerMock
+            .Protected()
+            .SetupSequence<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(productResponseContent, Encoding.UTF8, "application/json")
+            })
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(orderResponseContent, Encoding.UTF8, "application/json")
+            });
+
+        // Act
+        var result = await _service.GetCategorizedOrdersByCustomerAsync(minOrdersPerCustomer: 2);
+
+        // Assert
+        result.Should().NotBeNull();
+        
+        // Customer should be excluded entirely since both categories are filtered out
+        result.OrdersByCustomer.Should().BeEmpty();
+        result.TotalCustomers.Should().Be(0);
+        result.TotalAutomationOrders.Should().Be(0);
+        result.TotalDogExtraOrders.Should().Be(0);
     }
 }
