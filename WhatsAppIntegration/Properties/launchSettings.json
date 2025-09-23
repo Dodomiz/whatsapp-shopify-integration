@@ -1,0 +1,41 @@
+﻿{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5015",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "WhatsApp__AccessToken": "your_whatsapp_access_token_here",
+        "WhatsApp__PhoneNumberId": "your_phone_number_id_here",
+        "WhatsApp__WebhookVerifyToken": "your_webhook_verify_token_here",
+        "WhatsApp__AppSecret": "your_app_secret_here",
+        "WhatsApp__BaseUrl": "https://graph.facebook.com",
+        "WhatsApp__ApiVersion": "v18.0",
+        "Shopify__ShopDomain": "your_shop_domain_here",
+        "Shopify__AccessToken": "your_shopify_access_token_here",
+        "Shopify__ApiVersion": "2024-01"
+      }
+    },
+    "https": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "https://localhost:7021;http://localhost:5015",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "WhatsApp__AccessToken": "your_whatsapp_access_token_here",
+        "WhatsApp__PhoneNumberId": "your_phone_number_id_here",
+        "WhatsApp__WebhookVerifyToken": "your_webhook_verify_token_here",
+        "WhatsApp__AppSecret": "your_app_secret_here",
+        "WhatsApp__BaseUrl": "https://graph.facebook.com",
+        "WhatsApp__ApiVersion": "v18.0",
+        "Shopify__ShopDomain": "your_shop_domain_here",
+        "Shopify__AccessToken": "your_shopify_access_token_here",
+        "Shopify__ApiVersion": "2023-10"
+      }
+    }
+  }
+}

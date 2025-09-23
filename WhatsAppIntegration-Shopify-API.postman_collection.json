@@ -1,0 +1,589 @@
+{
+	"info": {
+		"_postman_id": "f8d9a4c1-2b3d-4e7f-9c1a-8b5f6d9e2a4c",
+		"name": "WhatsApp Integration - Shopify API",
+		"description": "Complete collection of Shopify API endpoints for WhatsApp Integration project. Includes customers, orders, products, and analytics endpoints with filtering, pagination, and categorization features.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "12345678"
+	},
+	"item": [
+		{
+			"name": "Customers",
+			"item": [
+				{
+					"name": "Get Customers by Tags",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/shopify/customers/by-tags?tags=vip,premium&limit=50&excludeTags=blocked",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"shopify",
+								"customers",
+								"by-tags"
+							],
+							"query": [
+								{
+									"key": "tags",
+									"value": "vip,premium",
+									"description": "Comma-separated list of tags to filter by"
+								},
+								{
+									"key": "limit",
+									"value": "50",
+									"description": "Maximum number of customers to retrieve (default: 250)"
+								},
+								{
+									"key": "excludeTags",
+									"value": "blocked",
+									"description": "Comma-separated list of tags to exclude customers that have these tags"
+								}
+							]
+						},
+						"description": "Get customers with specific tags and optionally exclude customers with certain tags."
+					}
+				},
+				{
+					"name": "Get All Customers",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/shopify/customers?limit=100",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"shopify",
+								"customers"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "100",
+									"description": "Maximum number of customers to retrieve (null for unlimited)"
+								}
+							]
+						},
+						"description": "Get all customers from the store with automatic pagination."
+					}
+				},
+				{
+					"name": "Get Customer by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/shopify/customers/{{customer_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"shopify",
+								"customers",
+								"{{customer_id}}"
+							]
+						},
+						"description": "Get a specific customer by their ID."
+					}
+				},
+				{
+					"name": "Get Customers Count",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/shopify/customers/count",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"shopify",
+								"customers",
+								"count"
+							]
+						},
+						"description": "Get the total count of customers in the store."
+					}
+				},
+				{
+					"name": "Get Customer Orders",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/shopify/customers/{{customer_id}}/orders?status=any&limit=250&sinceId=12345",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"shopify",
+								"customers",
+								"{{customer_id}}",
+								"orders"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "any",
+									"description": "Order status filter (any, open, closed, cancelled)"
+								},
+								{
+									"key": "limit",
+									"value": "250",
+									"description": "Maximum number of orders to retrieve"
+								},
+								{
+									"key": "sinceId",
+									"value": "12345",
+									"description": "Retrieve orders created after this ID"
+								}
+							]
+						},
+						"description": "Get all orders for a specific customer."
+					}
+				}
+			],
+			"description": "Customer-related endpoints for managing and retrieving customer data."
+		},
+		{
+			"name": "Orders",
+			"item": [
+				{
+					"name": "Get All Orders",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/shopify/orders?status=any&limit=null&sinceId=12345&createdAtMin=2024-01-01T00:00:00Z&createdAtMax=2024-12-31T23:59:59Z",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"shopify",
+								"orders"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "any",
+									"description": "Order status filter (any, open, closed, cancelled)"
+								},
+								{
+									"key": "limit",
+									"value": "null",
+									"description": "Maximum number of orders (null for unlimited, defaults to last 365 days if no date filters)"
+								},
+								{
+									"key": "sinceId",
+									"value": "12345",
+									"description": "Retrieve orders created after this ID"
+								},
+								{
+									"key": "createdAtMin",
+									"value": "2024-01-01T00:00:00Z",
+									"description": "Show orders created at or after date"
+								},
+								{
+									"key": "createdAtMax",
+									"value": "2024-12-31T23:59:59Z",
+									"description": "Show orders created at or before date"
+								}
+							]
+						},
+						"description": "Get all orders from the store. Defaults to last 365 days if no date filters provided to avoid response size limits."
+					}
+				},
+				{
+					"name": "Get Orders from Last N Days",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/shopify/orders/last-days?days=30&status=any&limit=null",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"shopify",
+								"orders",
+								"last-days"
+							],
+							"query": [
+								{
+									"key": "days",
+									"value": "30",
+									"description": "Number of days to look back (default: 365, max: 3650)"
+								},
+								{
+									"key": "status",
+									"value": "any",
+									"description": "Order status filter (any, open, closed, cancelled)"
+								},
+								{
+									"key": "limit",
+									"value": "null",
+									"description": "Maximum number of orders to retrieve (null for unlimited)"
+								}
+							]
+						},
+						"description": "Get orders from the last N days. Optimized for preventing response size issues."
+					}
+				},
+				{
+					"name": "Get Orders Grouped by Customer",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/shopify/orders/by-customer?status=any&limit=null&minOrdersPerCustomer=2&productIds=123,456,789&createdAtMin=2024-01-01T00:00:00Z&createdAtMax=2024-12-31T23:59:59Z",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"shopify",
+								"orders",
+								"by-customer"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "any",
+									"description": "Order status filter (any, open, closed, cancelled)"
+								},
+								{
+									"key": "limit",
+									"value": "null",
+									"description": "Maximum number of orders to retrieve (null for unlimited)"
+								},
+								{
+									"key": "minOrdersPerCustomer",
+									"value": "2",
+									"description": "Minimum number of orders required per customer to be included"
+								},
+								{
+									"key": "productIds",
+									"value": "123,456,789",
+									"description": "Comma-separated list of product IDs - only include orders containing these products"
+								},
+								{
+									"key": "createdAtMin",
+									"value": "2024-01-01T00:00:00Z",
+									"description": "Show orders created at or after date"
+								},
+								{
+									"key": "createdAtMax",
+									"value": "2024-12-31T23:59:59Z",
+									"description": "Show orders created at or before date"
+								}
+							]
+						},
+						"description": "Get orders grouped by customer ID with advanced filtering options including minimum orders per customer and product filtering."
+					}
+				},
+				{
+					"name": "Get Categorized Orders Grouped by Customer",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/shopify/orders/by-customer/categorized?status=any&limit=null&minOrdersPerCustomer=2&createdAtMin=2024-01-01T00:00:00Z&createdAtMax=2024-12-31T23:59:59Z",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"shopify",
+								"orders",
+								"by-customer",
+								"categorized"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "any",
+									"description": "Order status filter (any, open, closed, cancelled)"
+								},
+								{
+									"key": "limit",
+									"value": "null",
+									"description": "Maximum number of orders to retrieve (null for unlimited)"
+								},
+								{
+									"key": "minOrdersPerCustomer",
+									"value": "2",
+									"description": "Minimum number of orders required per customer to be included"
+								},
+								{
+									"key": "createdAtMin",
+									"value": "2024-01-01T00:00:00Z",
+									"description": "Show orders created at or after date"
+								},
+								{
+									"key": "createdAtMax",
+									"value": "2024-12-31T23:59:59Z",
+									"description": "Show orders created at or before date"
+								}
+							]
+						},
+						"description": "Get orders grouped by customer ID and categorized by product type (AutomationProducts and DogExtraProducts). Only returns orders containing products with 'includeAutomation' or 'dogExtra1' tags, separated into respective categories per customer."
+					}
+				}
+			],
+			"description": "Order-related endpoints with advanced filtering, grouping, and date range capabilities."
+		},
+		{
+			"name": "Products",
+			"item": [
+				{
+					"name": "Get All Products",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/shopify/products?limit=50&sinceId=12345&vendor=MyVendor&productType=Electronics",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"shopify",
+								"products"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "50",
+									"description": "Maximum number of products to retrieve (default: 50, max: 250)"
+								},
+								{
+									"key": "sinceId",
+									"value": "12345",
+									"description": "Retrieve products created after this ID"
+								},
+								{
+									"key": "vendor",
+									"value": "MyVendor",
+									"description": "Filter products by vendor"
+								},
+								{
+									"key": "productType",
+									"value": "Electronics",
+									"description": "Filter products by product type"
+								}
+							]
+						},
+						"description": "Get all products from the store with optional filtering by vendor and product type."
+					}
+				},
+				{
+					"name": "Get Product by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/shopify/products/{{product_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"shopify",
+								"products",
+								"{{product_id}}"
+							]
+						},
+						"description": "Get a specific product by its ID."
+					}
+				},
+				{
+					"name": "Get Categorized Products",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/shopify/products/categorized",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"shopify",
+								"products",
+								"categorized"
+							]
+						},
+						"description": "Get all products categorized by tags:\n- AutomationProducts: contain 'includeAutomation' tag and NOT 'dogExtra1'\n- Products: All products\n- DogExtraProducts: contain 'dogExtra1' tag\n\nReturns optimized response with only id, handle, and tags fields."
+					}
+				}
+			],
+			"description": "Product-related endpoints including categorization by tags with optimized field selection."
+		},
+		{
+			"name": "Analytics",
+			"item": [
+				{
+					"name": "Get Customer Analytics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/shopify/customers/{{customer_id}}/analytics",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"shopify",
+								"customers",
+								"{{customer_id}}",
+								"analytics"
+							]
+						},
+						"description": "Get customer analytics including purchase predictions for a specific customer."
+					}
+				},
+				{
+					"name": "Get Customer Analytics by Tags",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/shopify/customers/analytics/by-tags?tags=vip,premium&limit=50",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"shopify",
+								"customers",
+								"analytics",
+								"by-tags"
+							],
+							"query": [
+								{
+									"key": "tags",
+									"value": "vip,premium",
+									"description": "Comma-separated list of tags to filter customers by"
+								},
+								{
+									"key": "limit",
+									"value": "50",
+									"description": "Maximum number of customers to analyze (default: 50, max: 100)"
+								}
+							]
+						},
+						"description": "Get analytics for customers with specific tags."
+					}
+				},
+				{
+					"name": "Get Next Purchase Prediction",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/shopify/customers/{{customer_id}}/next-purchase-prediction",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"shopify",
+								"customers",
+								"{{customer_id}}",
+								"next-purchase-prediction"
+							]
+						},
+						"description": "Calculate next purchase date prediction for a customer based on their order history."
+					}
+				},
+				{
+					"name": "Get Customers Likely to Purchase Soon",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/shopify/customers/likely-to-purchase-soon?tags=vip&daysThreshold=7&limit=25",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"shopify",
+								"customers",
+								"likely-to-purchase-soon"
+							],
+							"query": [
+								{
+									"key": "tags",
+									"value": "vip",
+									"description": "Optional tags to filter customers"
+								},
+								{
+									"key": "daysThreshold",
+									"value": "7",
+									"description": "Number of days from now to consider 'soon' (default: 7, max: 365)"
+								},
+								{
+									"key": "limit",
+									"value": "25",
+									"description": "Maximum number of customers to analyze (default: 25, max: 50)"
+								}
+							]
+						},
+						"description": "Get customers who are likely to purchase soon based on their order patterns."
+					}
+				}
+			],
+			"description": "Analytics endpoints for customer behavior analysis and purchase predictions."
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "https://your-api-domain.com",
+			"description": "Base URL for the WhatsApp Integration API"
+		},
+		{
+			"key": "customer_id",
+			"value": "123456789",
+			"description": "Sample customer ID for testing"
+		},
+		{
+			"key": "product_id",
+			"value": "987654321",
+			"description": "Sample product ID for testing"
+		}
+	]
+}
