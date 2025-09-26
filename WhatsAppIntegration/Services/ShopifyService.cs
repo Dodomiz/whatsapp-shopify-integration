@@ -529,6 +529,30 @@ public class ShopifyService : IShopifyService
                 {
                     response.OrdersByCustomer[customerId] = categorizedOrders;
                     
+                    // Calculate next purchase predictions for each category
+                    NextPurchasePrediction? automationPrediction = null;
+                    NextPurchasePrediction? dogExtraPrediction = null;
+                    
+                    if (categorizedOrders.AutomationProductsOrders.Count > 0)
+                    {
+                        automationPrediction = CalculateNextPurchasePrediction(
+                            categorizedOrders.AutomationProductsOrders, 
+                            automationProductIds,
+                            productTagsLookup,
+                            "automation"
+                        );
+                    }
+                    
+                    if (categorizedOrders.DogExtraProductsOrders.Count > 0)
+                    {
+                        dogExtraPrediction = CalculateNextPurchasePrediction(
+                            categorizedOrders.DogExtraProductsOrders,
+                            dogExtraProductIds,
+                            productTagsLookup,
+                            "dogExtra"
+                        );
+                    }
+                    
                     // Save each customer's categorized orders to MongoDB
                     try
                     {
@@ -538,6 +562,8 @@ public class ShopifyService : IShopifyService
                             Customer = customerInfo,
                             AutomationProductsOrders = categorizedOrders.AutomationProductsOrders,
                             DogExtraProductsOrders = categorizedOrders.DogExtraProductsOrders,
+                            AutomationNextPurchase = automationPrediction,
+                            DogExtraNextPurchase = dogExtraPrediction,
                             Filters = new OrderFilters
                             {
                                 Status = status,
@@ -549,7 +575,7 @@ public class ShopifyService : IShopifyService
                         };
                         
                         await _categorizedOrdersRepository.SaveCategorizedOrdersAsync(document);
-                        _logger.LogDebug("Saved categorized orders to MongoDB for customer {CustomerId}", customerId);
+                        _logger.LogDebug("Saved categorized orders with next purchase predictions to MongoDB for customer {CustomerId}", customerId);
                     }
                     catch (Exception ex)
                     {
@@ -1114,5 +1140,156 @@ public class ShopifyService : IShopifyService
             // Intentionally exclude Customer to avoid duplication
             Customer = null
         };
+    }
+
+    private NextPurchasePrediction CalculateNextPurchasePrediction(
+        List<ShopifyOrder> orders,
+        HashSet<long> categoryProductIds,
+        Dictionary<long, List<string>> productTagsLookup,
+        string categoryName)
+    {
+        var prediction = new NextPurchasePrediction
+        {
+            CalculatedAt = DateTime.UtcNow
+        };
+
+        try
+        {
+            if (orders.Count == 0)
+            {
+                prediction.HasSufficientData = false;
+                prediction.PredictionReason = $"No {categoryName} orders found for this customer";
+                prediction.ConfidenceLevel = 0.0;
+                return prediction;
+            }
+
+            // Extract purchase dates
+            var purchaseDates = orders
+                .Select(o => o.CreatedAt)
+                .OrderBy(d => d)
+                .ToList();
+            
+            prediction.PurchaseDates = purchaseDates;
+
+            // Extract product details for this category
+            var productsInCategory = new Dictionary<long, ProductSummary>();
+            
+            foreach (var order in orders)
+            {
+                foreach (var lineItem in order.LineItems)
+                {
+                    if (!lineItem.ProductId.HasValue || !categoryProductIds.Contains(lineItem.ProductId.Value))
+                        continue;
+
+                    var productId = lineItem.ProductId.Value;
+                    
+                    if (!productsInCategory.ContainsKey(productId))
+                    {
+                        productsInCategory[productId] = new ProductSummary
+                        {
+                            ProductId = productId,
+                            Title = lineItem.Title ?? "Unknown Product",
+                            Tags = productTagsLookup.TryGetValue(productId, out var tags) ? tags : new List<string>(),
+                            PurchaseCount = 0,
+                            TotalQuantityPurchased = 0,
+                            LastPurchaseDate = order.CreatedAt
+                        };
+                    }
+
+                    var productSummary = productsInCategory[productId];
+                    productSummary.PurchaseCount++;
+                    productSummary.TotalQuantityPurchased += lineItem.Quantity;
+                    
+                    if (order.CreatedAt > productSummary.LastPurchaseDate)
+                    {
+                        productSummary.LastPurchaseDate = order.CreatedAt;
+                    }
+                }
+            }
+
+            prediction.ProductsInCategory = productsInCategory.Values.ToList();
+
+            // Calculate next purchase date if we have enough data
+            if (purchaseDates.Count < 2)
+            {
+                prediction.HasSufficientData = false;
+                prediction.PredictionReason = $"Need at least 2 {categoryName} orders to calculate prediction. Found {purchaseDates.Count} order(s)";
+                prediction.ConfidenceLevel = 0.0;
+                return prediction;
+            }
+
+            // Calculate intervals between purchases
+            var intervals = new List<double>();
+            for (int i = 1; i < purchaseDates.Count; i++)
+            {
+                var daysBetween = (purchaseDates[i] - purchaseDates[i - 1]).TotalDays;
+                intervals.Add(daysBetween);
+            }
+
+            if (intervals.Count == 0)
+            {
+                prediction.HasSufficientData = false;
+                prediction.PredictionReason = "Unable to calculate intervals between purchases";
+                prediction.ConfidenceLevel = 0.0;
+                return prediction;
+            }
+
+            // Calculate average days between purchases
+            var averageInterval = intervals.Average();
+            prediction.AverageDaysBetweenPurchases = averageInterval;
+
+            // Calculate standard deviation for confidence assessment
+            var variance = intervals.Sum(interval => Math.Pow(interval - averageInterval, 2)) / intervals.Count;
+            var standardDeviation = Math.Sqrt(variance);
+
+            // Calculate confidence level based on consistency of purchase intervals
+            // Lower standard deviation relative to average = higher confidence
+            var coefficientOfVariation = standardDeviation / Math.Abs(averageInterval);
+            var baseConfidence = Math.Max(0, 1 - (coefficientOfVariation / 2)); // Cap at reasonable level
+            
+            // Adjust confidence based on number of data points
+            var dataPointsFactor = Math.Min(1.0, intervals.Count / 5.0); // Max confidence at 5+ intervals
+            prediction.ConfidenceLevel = Math.Round(baseConfidence * dataPointsFactor, 2);
+
+            // Calculate next purchase date
+            var lastPurchaseDate = purchaseDates.Last();
+            var adjustedInterval = averageInterval;
+            
+            // Add some variability based on standard deviation for more realistic prediction
+            if (intervals.Count >= 3) // Only adjust if we have enough data points
+            {
+                adjustedInterval += (standardDeviation * 0.25); // Add small buffer
+            }
+
+            prediction.NextPurchaseDate = lastPurchaseDate.AddDays(adjustedInterval);
+            prediction.HasSufficientData = true;
+            
+            // Generate prediction reason
+            if (prediction.ConfidenceLevel >= 0.7)
+            {
+                prediction.PredictionReason = $"High confidence prediction based on {intervals.Count} purchase intervals. Consistent {categoryName} purchase pattern.";
+            }
+            else if (prediction.ConfidenceLevel >= 0.4)
+            {
+                prediction.PredictionReason = $"Moderate confidence prediction based on {intervals.Count} purchase intervals. Some variation in {categoryName} purchase timing.";
+            }
+            else
+            {
+                prediction.PredictionReason = $"Low confidence prediction based on {intervals.Count} purchase intervals. Irregular {categoryName} purchase pattern.";
+            }
+
+            _logger.LogDebug("Calculated next purchase prediction for {Category}: {NextDate} (confidence: {Confidence}, avg interval: {AvgInterval} days)", 
+                categoryName, prediction.NextPurchaseDate?.ToString("yyyy-MM-dd"), prediction.ConfidenceLevel, Math.Round(averageInterval, 1));
+
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error calculating next purchase prediction for {Category}", categoryName);
+            prediction.HasSufficientData = false;
+            prediction.PredictionReason = $"Error occurred while calculating {categoryName} prediction: {ex.Message}";
+            prediction.ConfidenceLevel = 0.0;
+        }
+
+        return prediction;
     }
 }

@@ -215,4 +215,49 @@ public class CategorizedOrdersRepository : ICategorizedOrdersRepository
             return new List<CategorizedOrdersDocument>();
         }
     }
+
+    public async Task<ShopifyCategorizedOrdersByCustomerResponse> GetCategorizedOrdersResponseAsync(int? limit = null)
+    {
+        try
+        {
+            _logger.LogInformation("Retrieving categorized orders from database for response format with limit: {Limit}", limit);
+
+            var findOptions = new FindOptions<CategorizedOrdersDocument>
+            {
+                Sort = Builders<CategorizedOrdersDocument>.Sort.Descending(x => x.UpdatedAt)
+            };
+            
+            if (limit.HasValue)
+            {
+                findOptions.Limit = limit.Value;
+            }
+
+            var documents = await _collection.Find(FilterDefinition<CategorizedOrdersDocument>.Empty).Sort(findOptions.Sort).Limit(findOptions.Limit).ToListAsync();
+            
+            var response = new ShopifyCategorizedOrdersByCustomerResponse();
+            
+            foreach (var doc in documents)
+            {
+                var categorizedOrders = new CustomerCategorizedOrders
+                {
+                    Customer = doc.Customer,
+                    AutomationProductsOrders = doc.AutomationProductsOrders,
+                    DogExtraProductsOrders = doc.DogExtraProductsOrders,
+                    // Include next purchase predictions in the response
+                    AutomationNextPurchase = doc.AutomationNextPurchase,
+                    DogExtraNextPurchase = doc.DogExtraNextPurchase
+                };
+                
+                response.OrdersByCustomer[doc.CustomerId] = categorizedOrders;
+            }
+            
+            _logger.LogInformation("Successfully converted {Count} MongoDB documents to response format", documents.Count);
+            return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving categorized orders response from database");
+            return new ShopifyCategorizedOrdersByCustomerResponse();
+        }
+    }
 }

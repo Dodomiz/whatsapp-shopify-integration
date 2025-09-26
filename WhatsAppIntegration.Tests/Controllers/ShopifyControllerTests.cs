@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using WhatsAppIntegration.Controllers;
 using WhatsAppIntegration.Models;
+using WhatsAppIntegration.Repositories;
 using WhatsAppIntegration.Services;
 
 namespace WhatsAppIntegration.Tests.Controllers;
@@ -11,14 +12,16 @@ namespace WhatsAppIntegration.Tests.Controllers;
 public class ShopifyControllerTests
 {
     private readonly Mock<IShopifyService> _shopifyServiceMock;
+    private readonly Mock<ICategorizedOrdersRepository> _repositoryMock;
     private readonly Mock<ILogger<ShopifyController>> _loggerMock;
     private readonly ShopifyController _controller;
 
     public ShopifyControllerTests()
     {
         _shopifyServiceMock = new Mock<IShopifyService>();
+        _repositoryMock = new Mock<ICategorizedOrdersRepository>();
         _loggerMock = new Mock<ILogger<ShopifyController>>();
-        _controller = new ShopifyController(_shopifyServiceMock.Object, _loggerMock.Object);
+        _controller = new ShopifyController(_shopifyServiceMock.Object, _repositoryMock.Object, _loggerMock.Object);
     }
 
     #region Customer Tests
@@ -557,23 +560,21 @@ public class ShopifyControllerTests
             .ReturnsAsync(response);
 
         // Act
-        var result = await _controller.GetCategorizedOrdersByCustomer();
+        var result = await _controller.ProcessCategorizedOrdersByCustomer();
 
         // Assert
         result.Should().BeOfType<OkObjectResult>();
         var okResult = (OkObjectResult)result;
-        var returnedResponse = okResult.Value.Should().BeOfType<ShopifyCategorizedOrdersByCustomerResponse>().Subject;
-        returnedResponse.TotalCustomers.Should().Be(1);
-        returnedResponse.TotalAutomationOrders.Should().Be(1);
-        returnedResponse.TotalDogExtraOrders.Should().Be(1);
-        returnedResponse.OrdersByCustomer.Should().ContainKey(123);
+        var returnedResponse = okResult.Value.Should().BeOfType<CategorizedOrdersProcessedResponse>().Subject;
+        returnedResponse.ProcessedCustomersCount.Should().Be(1);
+        returnedResponse.ProcessedCustomerIds.Should().Contain(123);
     }
 
     [Fact]
     public async Task GetCategorizedOrdersByCustomer_WithInvalidStatus_ShouldReturnBadRequest()
     {
         // Act
-        var result = await _controller.GetCategorizedOrdersByCustomer(status: "invalid");
+        var result = await _controller.ProcessCategorizedOrdersByCustomer(status: "invalid");
 
         // Assert
         result.Should().BeOfType<BadRequestObjectResult>();
@@ -589,13 +590,13 @@ public class ShopifyControllerTests
             .ThrowsAsync(new Exception("Service error"));
 
         // Act
-        var result = await _controller.GetCategorizedOrdersByCustomer();
+        var result = await _controller.ProcessCategorizedOrdersByCustomer();
 
         // Assert
         result.Should().BeOfType<ObjectResult>();
         var objectResult = (ObjectResult)result;
         objectResult.StatusCode.Should().Be(500);
-        objectResult.Value.Should().Be("Internal server error while retrieving categorized orders by customer");
+        objectResult.Value.Should().Be("Internal server error while processing categorized orders by customer");
     }
 
     #endregion

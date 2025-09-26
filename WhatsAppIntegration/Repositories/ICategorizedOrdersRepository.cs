@@ -49,4 +49,11 @@ public interface ICategorizedOrdersRepository
     /// <param name="endDate">End date (inclusive)</param>
     /// <returns>List of categorized orders documents</returns>
     Task<List<CategorizedOrdersDocument>> GetCategorizedOrdersByDateRangeAsync(DateTime startDate, DateTime endDate);
+    
+    /// <summary>
+    /// Get categorized orders converted to response format
+    /// </summary>
+    /// <param name="limit">Maximum number of customers to return</param>
+    /// <returns>Formatted response with categorized orders</returns>
+    Task<ShopifyCategorizedOrdersByCustomerResponse> GetCategorizedOrdersResponseAsync(int? limit = null);
 }

@@ -75,6 +75,18 @@ public class CategorizedOrdersDocument
     /// </summary>
     [BsonElement("totalOrders")]
     public int TotalOrders => TotalAutomationOrders + TotalDogExtraOrders;
+    
+    /// <summary>
+    /// Next purchase prediction for automation products
+    /// </summary>
+    [BsonElement("automationNextPurchase")]
+    public NextPurchasePrediction? AutomationNextPurchase { get; set; }
+    
+    /// <summary>
+    /// Next purchase prediction for dog extra products
+    /// </summary>
+    [BsonElement("dogExtraNextPurchase")]
+    public NextPurchasePrediction? DogExtraNextPurchase { get; set; }
 }
 
 /// <summary>
@@ -111,4 +123,100 @@ public class OrderFilters
     /// </summary>
     [BsonElement("createdAtMax")]
     public DateTime? CreatedAtMax { get; set; }
+}
+
+/// <summary>
+/// Next purchase prediction data for a specific product category
+/// </summary>
+public class NextPurchasePrediction
+{
+    /// <summary>
+    /// Predicted next purchase date
+    /// </summary>
+    [BsonElement("nextPurchaseDate")]
+    public DateTime? NextPurchaseDate { get; set; }
+    
+    /// <summary>
+    /// Average days between purchases
+    /// </summary>
+    [BsonElement("averageDaysBetweenPurchases")]
+    public double? AverageDaysBetweenPurchases { get; set; }
+    
+    /// <summary>
+    /// Purchase dates used for calculation
+    /// </summary>
+    [BsonElement("purchaseDates")]
+    public List<DateTime> PurchaseDates { get; set; } = new();
+    
+    /// <summary>
+    /// Product details involved in the category
+    /// </summary>
+    [BsonElement("productsInCategory")]
+    public List<ProductSummary> ProductsInCategory { get; set; } = new();
+    
+    /// <summary>
+    /// Confidence level of the prediction (0-1)
+    /// </summary>
+    [BsonElement("confidenceLevel")]
+    public double ConfidenceLevel { get; set; }
+    
+    /// <summary>
+    /// Whether there's enough data to make a prediction
+    /// </summary>
+    [BsonElement("hasSufficientData")]
+    public bool HasSufficientData { get; set; }
+    
+    /// <summary>
+    /// Reason for prediction or lack thereof
+    /// </summary>
+    [BsonElement("predictionReason")]
+    public string PredictionReason { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Timestamp when prediction was calculated
+    /// </summary>
+    [BsonElement("calculatedAt")]
+    public DateTime CalculatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Summary of product information for next purchase prediction
+/// </summary>
+public class ProductSummary
+{
+    /// <summary>
+    /// Product ID
+    /// </summary>
+    [BsonElement("productId")]
+    public long ProductId { get; set; }
+    
+    /// <summary>
+    /// Product title
+    /// </summary>
+    [BsonElement("title")]
+    public string Title { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Product tags
+    /// </summary>
+    [BsonElement("tags")]
+    public List<string> Tags { get; set; } = new();
+    
+    /// <summary>
+    /// Number of times purchased
+    /// </summary>
+    [BsonElement("purchaseCount")]
+    public int PurchaseCount { get; set; }
+    
+    /// <summary>
+    /// Total quantity purchased
+    /// </summary>
+    [BsonElement("totalQuantityPurchased")]
+    public int TotalQuantityPurchased { get; set; }
+    
+    /// <summary>
+    /// Last purchase date for this product
+    /// </summary>
+    [BsonElement("lastPurchaseDate")]
+    public DateTime? LastPurchaseDate { get; set; }
 }

@@ -873,6 +873,12 @@ public class CustomerCategorizedOrders
     [JsonPropertyName("dogExtraProductsOrders")]
     public List<ShopifyOrder> DogExtraProductsOrders { get; set; } = new();
     
+    [JsonPropertyName("automationNextPurchase")]
+    public NextPurchasePrediction? AutomationNextPurchase { get; set; }
+    
+    [JsonPropertyName("dogExtraNextPurchase")]
+    public NextPurchasePrediction? DogExtraNextPurchase { get; set; }
+    
     [JsonPropertyName("totalOrders")]
     public int TotalOrders => AutomationProductsOrders.Count + DogExtraProductsOrders.Count;
 }
@@ -937,4 +943,25 @@ public class CustomerAnalytics
     public List<ShopifyOrder> RecentOrders { get; set; } = new();
     public List<string> FavoriteProducts { get; set; } = new();
     public string PurchaseFrequency { get; set; } = string.Empty; // "Regular", "Occasional", "One-time"
+}
+
+/// <summary>
+/// Response model for categorized orders processing summary
+/// </summary>
+public class CategorizedOrdersProcessedResponse
+{
+    /// <summary>
+    /// List of customer IDs that were processed and saved to database
+    /// </summary>
+    public List<long> ProcessedCustomerIds { get; set; } = new();
+    
+    /// <summary>
+    /// Total count of customers processed
+    /// </summary>
+    public int ProcessedCustomersCount { get; set; }
+    
+    /// <summary>
+    /// Timestamp when processing was completed
+    /// </summary>
+    public DateTime ProcessedAt { get; set; } = DateTime.UtcNow;
 }
