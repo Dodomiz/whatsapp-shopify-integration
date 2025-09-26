@@ -518,10 +518,10 @@ public class ShopifyService : IShopifyService
                         categorizedOrders.AutomationProductsOrders.Clear();
                     }
                     
-                    if (categorizedOrders.DogExtraProductsOrders.Count < minOrdersPerCustomer.Value)
-                    {
-                        categorizedOrders.DogExtraProductsOrders.Clear();
-                    }
+                    // if (categorizedOrders.DogExtraProductsOrders.Count < minOrdersPerCustomer.Value)
+                    // {
+                    //     categorizedOrders.DogExtraProductsOrders.Clear();
+                    // }
                 }
                 
                 // Only include customers that have orders in at least one category after filtering

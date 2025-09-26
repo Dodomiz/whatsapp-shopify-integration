@@ -33,12 +33,12 @@ public class SyncServiceConfig
     /// <summary>
     /// Maximum number of orders to retrieve per sync
     /// </summary>
-    public int? MaxOrdersLimit { get; set; } = 1000;
+    public int? MaxOrdersLimit { get; set; } = null;
 
     /// <summary>
     /// Minimum orders per customer to be included
     /// </summary>
-    public int? MinOrdersPerCustomer { get; set; } = 1;
+    public int? MinOrdersPerCustomer { get; set; } = 3;
 
     /// <summary>
     /// Order status filter (any, open, closed, cancelled)
