@@ -1,6 +1,8 @@
 using System.Reflection;
 using Microsoft.OpenApi.Models;
+using WhatsAppIntegration.Configuration;
 using WhatsAppIntegration.Models;
+using WhatsAppIntegration.Repositories;
 using WhatsAppIntegration.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,6 +18,14 @@ builder.Services.Configure<WhatsAppConfig>(
 builder.Services.Configure<ShopifyConfig>(
     builder.Configuration.GetSection("Shopify"));
 
+// Configure MongoDB settings from environment variables
+builder.Services.Configure<MongoDbConfig>(options =>
+{
+    options.ConnectionString = builder.Configuration["MongoDB__ConnectionString"] ?? "mongodb://localhost:27017";
+    options.DatabaseName = builder.Configuration["MongoDB__DatabaseName"] ?? "WhatsAppIntegration";
+    options.CategorizedOrdersCollection = builder.Configuration["MongoDB__CategorizedOrdersCollection"] ?? "CategorizedOrders";
+});
+
 // Add HttpClient for WhatsApp service
 builder.Services.AddHttpClient<IWhatsAppService, WhatsAppService>();
 
@@ -27,6 +37,9 @@ builder.Services.AddScoped<IWhatsAppService, WhatsAppService>();
 
 // Register Shopify service
 builder.Services.AddScoped<IShopifyService, ShopifyService>();
+
+// Register MongoDB repository
+builder.Services.AddScoped<ICategorizedOrdersRepository, CategorizedOrdersRepository>();
 
 // Add Swagger/OpenAPI support
 builder.Services.AddEndpointsApiExplorer();

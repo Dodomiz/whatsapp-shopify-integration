@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Moq.Protected;
 using WhatsAppIntegration.Models;
+using WhatsAppIntegration.Repositories;
 using WhatsAppIntegration.Services;
 
 namespace WhatsAppIntegration.Tests.Services;
@@ -16,6 +17,7 @@ public class ShopifyServiceTests
     private readonly Mock<HttpMessageHandler> _httpMessageHandlerMock;
     private readonly Mock<ILogger<ShopifyService>> _loggerMock;
     private readonly Mock<IOptions<ShopifyConfig>> _configMock;
+    private readonly Mock<ICategorizedOrdersRepository> _repositoryMock;
     private readonly ShopifyConfig _config;
     private readonly HttpClient _httpClient;
     private readonly ShopifyService _service;
@@ -25,6 +27,7 @@ public class ShopifyServiceTests
         _httpMessageHandlerMock = new Mock<HttpMessageHandler>();
         _loggerMock = new Mock<ILogger<ShopifyService>>();
         _configMock = new Mock<IOptions<ShopifyConfig>>();
+        _repositoryMock = new Mock<ICategorizedOrdersRepository>();
         
         _config = new ShopifyConfig
         {
@@ -35,7 +38,7 @@ public class ShopifyServiceTests
         
         _configMock.Setup(x => x.Value).Returns(_config);
         _httpClient = new HttpClient(_httpMessageHandlerMock.Object);
-        _service = new ShopifyService(_httpClient, _configMock.Object, _loggerMock.Object);
+        _service = new ShopifyService(_httpClient, _configMock.Object, _loggerMock.Object, _repositoryMock.Object);
     }
 
     [Fact]
@@ -538,7 +541,7 @@ public class ShopifyServiceTests
     {
         // Arrange & Act
         var httpClient = new HttpClient();
-        var service = new ShopifyService(httpClient, _configMock.Object, _loggerMock.Object);
+        var service = new ShopifyService(httpClient, _configMock.Object, _loggerMock.Object, _repositoryMock.Object);
 
         // Assert
         httpClient.DefaultRequestHeaders.Should().Contain(h => h.Key == "X-Shopify-Access-Token");

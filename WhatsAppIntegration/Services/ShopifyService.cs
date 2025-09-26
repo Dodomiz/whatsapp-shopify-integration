@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using WhatsAppIntegration.Constants;
 using WhatsAppIntegration.Models;
+using WhatsAppIntegration.Repositories;
 
 namespace WhatsAppIntegration.Services;
 
@@ -10,16 +11,18 @@ public class ShopifyService : IShopifyService
     private readonly HttpClient _httpClient;
     private readonly ShopifyConfig _config;
     private readonly ILogger<ShopifyService> _logger;
+    private readonly ICategorizedOrdersRepository _categorizedOrdersRepository;
     private readonly JsonSerializerOptions _jsonOptions;
     
     // Only fetch the specific customer fields we need for better performance
     private const string CustomerFields = "id,first_name,last_name,phone,orders_count,last_order_id,state,last_order_name,total_spent,tags,created_at,updated_at";
 
-    public ShopifyService(HttpClient httpClient, IOptions<ShopifyConfig> config, ILogger<ShopifyService> logger)
+    public ShopifyService(HttpClient httpClient, IOptions<ShopifyConfig> config, ILogger<ShopifyService> logger, ICategorizedOrdersRepository categorizedOrdersRepository)
     {
         _httpClient = httpClient;
         _config = config.Value;
         _logger = logger;
+        _categorizedOrdersRepository = categorizedOrdersRepository;
         
         _jsonOptions = new JsonSerializerOptions
         {
@@ -525,6 +528,34 @@ public class ShopifyService : IShopifyService
                 if (categorizedOrders.TotalOrders > 0)
                 {
                     response.OrdersByCustomer[customerId] = categorizedOrders;
+                    
+                    // Save each customer's categorized orders to MongoDB
+                    try
+                    {
+                        var document = new CategorizedOrdersDocument
+                        {
+                            CustomerId = customerId,
+                            Customer = customerInfo,
+                            AutomationProductsOrders = categorizedOrders.AutomationProductsOrders,
+                            DogExtraProductsOrders = categorizedOrders.DogExtraProductsOrders,
+                            Filters = new OrderFilters
+                            {
+                                Status = status,
+                                Limit = limit,
+                                MinOrdersPerCustomer = minOrdersPerCustomer,
+                                CreatedAtMin = createdAtMin,
+                                CreatedAtMax = createdAtMax
+                            }
+                        };
+                        
+                        await _categorizedOrdersRepository.SaveCategorizedOrdersAsync(document);
+                        _logger.LogDebug("Saved categorized orders to MongoDB for customer {CustomerId}", customerId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to save categorized orders to MongoDB for customer {CustomerId}", customerId);
+                        // Continue processing other customers even if MongoDB save fails
+                    }
                 }
             }
 
