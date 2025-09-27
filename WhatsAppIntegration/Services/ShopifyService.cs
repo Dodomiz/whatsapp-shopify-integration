@@ -8,29 +8,27 @@ namespace WhatsAppIntegration.Services;
 
 public class ShopifyService : IShopifyService
 {
-    private readonly HttpClient _httpClient;
     private readonly ShopifyConfig _config;
     private readonly ILogger<ShopifyService> _logger;
     private readonly ICategorizedOrdersRepository _categorizedOrdersRepository;
+    private readonly IShopifyServerAccess _shopifyServerAccess;
     private readonly JsonSerializerOptions _jsonOptions;
     
     // Only fetch the specific customer fields we need for better performance
     private const string CustomerFields = "id,first_name,last_name,phone,orders_count,last_order_id,state,last_order_name,total_spent,tags,created_at,updated_at";
 
-    public ShopifyService(HttpClient httpClient, IOptions<ShopifyConfig> config, ILogger<ShopifyService> logger, ICategorizedOrdersRepository categorizedOrdersRepository)
+    public ShopifyService(IOptions<ShopifyConfig> config, ILogger<ShopifyService> logger, ICategorizedOrdersRepository categorizedOrdersRepository, IShopifyServerAccess shopifyServerAccess)
     {
-        _httpClient = httpClient;
         _config = config.Value;
         _logger = logger;
         _categorizedOrdersRepository = categorizedOrdersRepository;
+        _shopifyServerAccess = shopifyServerAccess;
         
         _jsonOptions = new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             WriteIndented = false
         };
-
-        _httpClient.DefaultRequestHeaders.Add("X-Shopify-Access-Token", _config.AccessToken);
     }
 
     public async Task<List<ShopifyCustomer>> GetCustomersWithTagsAsync(string? tags, int? limit, string? excludeTags = null)
@@ -154,198 +152,27 @@ public class ShopifyService : IShopifyService
 
     public async Task<ShopifyCustomer?> GetCustomerAsync(long customerId)
     {
-        try
-        {
-            var url = $"{_config.BaseUrl}/admin/api/{_config.ApiVersion}/customers/{customerId}.json?fields={CustomerFields}";
-            var response = await _httpClient.GetAsync(url);
-
-            if (response.IsSuccessStatusCode)
-            {
-                var content = await response.Content.ReadAsStringAsync();
-                using var document = JsonDocument.Parse(content);
-                
-                if (document.RootElement.TryGetProperty("customer", out var customerElement))
-                {
-                    return JsonSerializer.Deserialize<ShopifyCustomer>(customerElement.GetRawText(), _jsonOptions);
-                }
-            }
-
-            _logger.LogWarning("Failed to get customer {CustomerId}. Status: {StatusCode}", customerId, response.StatusCode);
-            return null;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting customer {CustomerId}", customerId);
-            return null;
-        }
+        return await _shopifyServerAccess.GetCustomerAsync(customerId);
     }
 
     public async Task<int> GetCustomersCountAsync()
     {
-        try
-        {
-            var url = $"{_config.BaseUrl}/admin/api/{_config.ApiVersion}/customers/count.json";
-            var response = await _httpClient.GetAsync(url);
-
-            if (response.IsSuccessStatusCode)
-            {
-                var content = await response.Content.ReadAsStringAsync();
-                using var document = JsonDocument.Parse(content);
-                
-                if (document.RootElement.TryGetProperty("count", out var countElement))
-                {
-                    return countElement.GetInt32();
-                }
-            }
-
-            _logger.LogWarning("Failed to get customers count. Status: {StatusCode}", response.StatusCode);
-            return 0;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting customers count");
-            return 0;
-        }
+        return await _shopifyServerAccess.GetCustomersCountAsync();
     }
 
     public async Task<List<ShopifyOrder>> GetCustomerOrdersAsync(long customerId, string status = "any", int limit = 250, long? sinceId = null)
     {
-        try
-        {
-            var allOrders = new List<ShopifyOrder>();
-            var currentSinceId = sinceId;
-            
-            do
-            {
-                var url = BuildCustomerOrdersUrl(customerId, status, limit, currentSinceId);
-                var orders = await FetchOrdersAsync(url);
-                
-                if (orders.Count == 0)
-                    break;
-
-                allOrders.AddRange(orders);
-                
-                if (orders.Count < limit)
-                    break;
-                    
-                currentSinceId = orders.Last().Id;
-                
-            } while (allOrders.Count < 1000); // Safety limit
-
-            _logger.LogInformation("Retrieved {Count} orders for customer {CustomerId}", allOrders.Count, customerId);
-            return allOrders;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error fetching orders for customer {CustomerId}", customerId);
-            return new List<ShopifyOrder>();
-        }
+        return await _shopifyServerAccess.GetCustomerOrdersAsync(customerId, status, limit, sinceId);
     }
 
-    public async Task<List<ShopifyOrder>> GetAllOrdersAsync(string status = "any", int? limit = null, long? sinceId = null, DateTime? createdAtMin = null, DateTime? createdAtMax = null)
+    public async Task<List<ShopifyOrder>> GetAllOrdersAsync(string status = "any", int? limit = null, long? sinceId = null, DateTime? createdAtMin = null, DateTime? createdAtMax = null, List<long>? customerIds = null)
     {
-        try
-        {
-            // If no date filters are provided, default to the last year to avoid response size limits
-            // if (!createdAtMin.HasValue && !createdAtMax.HasValue)
-            // {
-            //     createdAtMin = DateTime.UtcNow.AddDays(-90);
-            //     _logger.LogInformation("No date filters provided. Defaulting to fetch orders from the last 90 days (since {Date})", 
-            //         createdAtMin.Value.ToString("yyyy-MM-dd"));
-            // }
-            //
-            var allOrders = new List<ShopifyOrder>();
-            const int batchSize = 250; // Maximum allowed by Shopify API
-            string? nextPageInfo = null;
-            var totalBatches = 0;
-            
-            _logger.LogInformation("Starting to fetch all orders using page_info pagination with batch size {BatchSize}. " +
-                "Filters: status={Status}, sinceId={SinceId}, createdAtMin={CreatedAtMin}, createdAtMax={CreatedAtMax}", 
-                batchSize, status, sinceId, createdAtMin, createdAtMax);
-            
-            do
-            {
-                totalBatches++;
-
-                // Use page_info pagination for all requests
-                // For the first request, include sinceId if provided; subsequent requests use page_info only
-                var currentSinceId = (totalBatches == 1) ? sinceId : null;
-                var url = BuildOrdersUrlWithPageInfo(status, batchSize, nextPageInfo, createdAtMin, createdAtMax, currentSinceId);
-                
-                _logger.LogDebug("Making Shopify API request to: {Url}", url);
-                var response = await _httpClient.GetAsync(url);
-                
-                if (!response.IsSuccessStatusCode)
-                {
-                    var errorContent = await response.Content.ReadAsStringAsync();
-                    _logger.LogError("Shopify API request failed. Status: {StatusCode}, URL: {Url}, Response: {Response}", 
-                        response.StatusCode, url, errorContent);
-                    throw new HttpRequestException($"Shopify API request failed with status {response.StatusCode}: {errorContent}");
-                }
-                
-                var jsonContent = await response.Content.ReadAsStringAsync();
-                var ordersResponse = JsonSerializer.Deserialize<ShopifyOrdersResponse>(jsonContent, _jsonOptions);
-                var orders = ordersResponse?.Orders ?? new List<ShopifyOrder>();
-                
-                if (orders.Count == 0)
-                {
-                    _logger.LogInformation("No more orders to fetch. Total retrieved: {Count} orders in {Batches} batches", 
-                        allOrders.Count, totalBatches);
-                    break;
-                }
-
-                allOrders.AddRange(orders);
-                
-                _logger.LogDebug("Batch {BatchNumber}: Fetched {BatchCount} orders. Total so far: {Total}", 
-                    totalBatches, orders.Count, allOrders.Count);
-                
-                // If a limit was specified, check if we've reached it
-                // if (limit.HasValue && allOrders.Count >= limit.Value)
-                // {
-                //     allOrders = allOrders.Take(limit.Value).ToList();
-                //     _logger.LogInformation("Reached specified limit of {Limit} orders after {Batches} batches", 
-                //         limit.Value, totalBatches);
-                //     break;
-                // }
-                
-                // Get next page URL from Link header
-                var nextPageUrl = ParseLinkHeader(response.Headers);
-                if (string.IsNullOrEmpty(nextPageUrl))
-                {
-                    _logger.LogInformation("No more pages available. Retrieved {Count} total orders in {Batches} batches", 
-                        allOrders.Count, totalBatches);
-                    break;
-                }
-                
-                // Extract page_info from the next page URL for the next iteration
-                nextPageInfo = ExtractPageInfoFromUrl(nextPageUrl);
-                
-                // Log progress every 10 batches for large datasets
-                if (totalBatches % 10 == 0)
-                {
-                    _logger.LogInformation("Progress: {Count} orders fetched across {Batches} batches", 
-                        allOrders.Count, totalBatches);
-                }
-                
-            } while (true); // Continue until no more orders or limit reached
-
-            _logger.LogInformation("Successfully retrieved {Count} total orders in {Batches} batches", 
-                allOrders.Count, totalBatches);
-            return allOrders;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error fetching all orders");
-            return new List<ShopifyOrder>();
-        }
+        return await _shopifyServerAccess.GetAllOrdersAsync(status, limit, sinceId, createdAtMin, createdAtMax, customerIds);
     }
 
     public async Task<List<ShopifyOrder>> GetOrdersFromLastDaysAsync(int days = 365, string status = "any", int? limit = null)
     {
-        var createdAtMin = DateTime.UtcNow.AddDays(-days);
-        _logger.LogInformation("Fetching orders from the last {Days} days (since {Date})", days, createdAtMin.ToString("yyyy-MM-dd"));
-        
-        return await GetAllOrdersAsync(status, limit, null, createdAtMin);
+        return await _shopifyServerAccess.GetOrdersFromLastDaysAsync(days, status, limit);
     }
 
     public async Task<Dictionary<long, List<ShopifyOrder>>> GetOrdersByCustomerAsync(string status = "any", int? limit = null, int? minOrdersPerCustomer = null, List<long>? productIds = null, DateTime? createdAtMin = null, DateTime? createdAtMax = null)
@@ -429,12 +256,12 @@ public class ShopifyService : IShopifyService
         }
     }
 
-    public async Task<ShopifyCategorizedOrdersByCustomerResponse> GetCategorizedOrdersByCustomerAsync(string status = "any", int? limit = null, int? minOrdersPerCustomer = null, DateTime? createdAtMin = null, DateTime? createdAtMax = null)
+    public async Task<ShopifyCategorizedOrdersByCustomerResponse> GetCategorizedOrdersByCustomerAsync(string status = "any", int? limit = null, int? minOrdersPerCustomer = null, DateTime? createdAtMin = null, DateTime? createdAtMax = null, List<long>? customerIds = null)
     {
         try
         {
-            _logger.LogInformation("Starting to fetch orders categorized by automation and dog extra products with filters: status={Status}, limit={Limit}, minOrders={MinOrders}, createdAtMin={CreatedAtMin}, createdAtMax={CreatedAtMax}", 
-                status, limit, minOrdersPerCustomer, createdAtMin, createdAtMax);
+            _logger.LogInformation("Starting to fetch orders categorized by automation and dog extra products with filters: status={Status}, limit={Limit}, minOrders={MinOrders}, createdAtMin={CreatedAtMin}, createdAtMax={CreatedAtMax}, customerIds={CustomerIds}", 
+                status, limit, minOrdersPerCustomer, createdAtMin, createdAtMax, customerIds?.Count);
 
             // First, get categorized products to know which product IDs belong to which category
             var categorizedProducts = await GetCategorizedProductsAsync();
@@ -475,8 +302,16 @@ public class ShopifyService : IShopifyService
             
             var response = new ShopifyCategorizedOrdersByCustomerResponse();
             
+            // Filter by customer IDs if provided
+            var filteredOrders = customerIds != null && customerIds.Any() 
+                ? allOrders.Where(kvp => customerIds.Contains(kvp.Key)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+                : allOrders;
+
+            _logger.LogInformation("Processing {FilteredCustomerCount} customers (filtered from {TotalCustomerCount} customers)", 
+                filteredOrders.Count, allOrders.Count);
+
             // Categorize orders for each customer
-            foreach (var (customerId, orders) in allOrders)
+            foreach (var (customerId, orders) in filteredOrders)
             {
                 // Get the first order to extract customer information
                 var customerInfo = orders.FirstOrDefault()?.Customer;
@@ -599,64 +434,12 @@ public class ShopifyService : IShopifyService
 
     public async Task<List<ShopifyProduct>> GetAllProductsAsync(int limit = 250, long? sinceId = null, string? vendor = null, string? productType = null)
     {
-        try
-        {
-            var allProducts = new List<ShopifyProduct>();
-            var currentSinceId = sinceId;
-            
-            do
-            {
-                var url = BuildProductsUrl(limit, currentSinceId, vendor, productType);
-                var products = await FetchProductsAsync(url);
-                
-                if (products.Count == 0)
-                    break;
-
-                allProducts.AddRange(products);
-                
-                if (products.Count < limit)
-                    break;
-                    
-                currentSinceId = products.Last().Id;
-                
-            } while (allProducts.Count < 2000); // Safety limit
-
-            _logger.LogInformation("Retrieved {Count} total products", allProducts.Count);
-            return allProducts;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error fetching all products");
-            return new List<ShopifyProduct>();
-        }
+        return await _shopifyServerAccess.GetAllProductsAsync(limit, sinceId, vendor, productType);
     }
 
     public async Task<ShopifyProduct?> GetProductAsync(long productId)
     {
-        try
-        {
-            var url = $"{_config.BaseUrl}/admin/api/{_config.ApiVersion}/products/{productId}.json";
-            var response = await _httpClient.GetAsync(url);
-
-            if (response.IsSuccessStatusCode)
-            {
-                var content = await response.Content.ReadAsStringAsync();
-                using var document = JsonDocument.Parse(content);
-                
-                if (document.RootElement.TryGetProperty("product", out var productElement))
-                {
-                    return JsonSerializer.Deserialize<ShopifyProduct>(productElement.GetRawText(), _jsonOptions);
-                }
-            }
-
-            _logger.LogWarning("Failed to get product {ProductId}. Status: {StatusCode}", productId, response.StatusCode);
-            return null;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting product {ProductId}", productId);
-            return null;
-        }
+        return await _shopifyServerAccess.GetProductAsync(productId);
     }
 
     public async Task<ShopifyCategorizedProductsResponse> GetCategorizedProductsAsync()
@@ -707,37 +490,7 @@ public class ShopifyService : IShopifyService
 
     private async Task<List<ShopifyProduct>> GetAllProductsWithFieldsAsync(string fields)
     {
-        try
-        {
-            var allProducts = new List<ShopifyProduct>();
-            long? currentSinceId = null;
-            const int limit = 250;
-            
-            do
-            {
-                var url = BuildProductsUrlWithFields(limit, currentSinceId, fields);
-                var products = await FetchProductsAsync(url);
-                
-                if (products.Count == 0)
-                    break;
-
-                allProducts.AddRange(products);
-                
-                if (products.Count < limit)
-                    break;
-                    
-                currentSinceId = products.Last().Id;
-                
-            } while (allProducts.Count < 10000); // Safety limit
-
-            _logger.LogInformation("Retrieved {Count} total products with fields: {Fields}", allProducts.Count, fields);
-            return allProducts;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error fetching products with fields: {Fields}", fields);
-            return new List<ShopifyProduct>();
-        }
+        return await _shopifyServerAccess.GetAllProductsWithFieldsAsync(fields);
     }
 
     public async Task<CustomerAnalytics?> GetCustomerAnalyticsAsync(long customerId)
@@ -970,64 +723,12 @@ public class ShopifyService : IShopifyService
         return url;
     }
 
-    private string BuildProductsUrlWithFields(int limit, long? sinceId, string fields)
-    {
-        var url = $"{_config.BaseUrl}/admin/api/{_config.ApiVersion}/products.json?limit={limit}&fields={fields}";
-        if (sinceId.HasValue)
-            url += $"&since_id={sinceId.Value}";
-        return url;
-    }
 
     private async Task<(List<ShopifyCustomer> customers, string? nextPageUrl)> FetchCustomersWithPaginationAsync(int limit, string? pageInfo = null)
     {
-        var url = BuildCustomersUrlWithPageInfo(limit, pageInfo);
-        var response = await _httpClient.GetAsync(url);
-        
-        if (response.IsSuccessStatusCode)
-        {
-            var content = await response.Content.ReadAsStringAsync();
-            var customersResponse = JsonSerializer.Deserialize<ShopifyCustomersResponse>(content, _jsonOptions);
-            var customers = customersResponse?.Customers ?? new List<ShopifyCustomer>();
-            
-            // Parse Link header to get next page URL
-            var nextPageUrl = ParseLinkHeader(response.Headers);
-            
-            return (customers, nextPageUrl);
-        }
-
-        _logger.LogWarning("Failed to fetch customers from {Url}. Status: {StatusCode}", url, response.StatusCode);
-        return (new List<ShopifyCustomer>(), null);
+        return await _shopifyServerAccess.FetchCustomersWithPaginationAsync(limit, pageInfo);
     }
 
-    private async Task<List<ShopifyOrder>> FetchOrdersAsync(string url)
-    {
-        var response = await _httpClient.GetAsync(url);
-        
-        if (response.IsSuccessStatusCode)
-        {
-            var content = await response.Content.ReadAsStringAsync();
-            var ordersResponse = JsonSerializer.Deserialize<ShopifyOrdersResponse>(content, _jsonOptions);
-            return ordersResponse?.Orders ?? new List<ShopifyOrder>();
-        }
-
-        _logger.LogWarning("Failed to fetch orders from {Url}. Status: {StatusCode}", url, response.StatusCode);
-        return new List<ShopifyOrder>();
-    }
-
-    private async Task<List<ShopifyProduct>> FetchProductsAsync(string url)
-    {
-        var response = await _httpClient.GetAsync(url);
-        
-        if (response.IsSuccessStatusCode)
-        {
-            var content = await response.Content.ReadAsStringAsync();
-            var productsResponse = JsonSerializer.Deserialize<ShopifyProductsResponse>(content, _jsonOptions);
-            return productsResponse?.Products ?? new List<ShopifyProduct>();
-        }
-
-        _logger.LogWarning("Failed to fetch products from {Url}. Status: {StatusCode}", url, response.StatusCode);
-        return new List<ShopifyProduct>();
-    }
 
     private static bool ContainsAnyTag(List<string> customerTags, IEnumerable<string> searchTags)
     {
@@ -1291,5 +992,52 @@ public class ShopifyService : IShopifyService
         }
 
         return prediction;
+    }
+
+
+
+
+    /// <summary>
+    /// Get customer IDs who have orders containing target products from the last X hours
+    /// </summary>
+    /// <param name="lookupHours">Number of hours to look back for orders</param>
+    /// <returns>List of customer IDs with target products from recent orders</returns>
+    public async Task<List<long>> GetCustomersWithTargetProductsFromRecentOrdersAsync(int lookupHours)
+    {
+        try
+        {
+            // Calculate lookback time
+            var lookbackDateTime = DateTime.UtcNow.AddHours(-lookupHours);
+            
+            _logger.LogInformation("Getting customers with target products from orders in the last {LookupHours} hours", lookupHours);
+
+            // Step 1: Fetch orders from the last X hours
+            var recentOrders = await GetAllOrdersAsync("any", null, null, lookbackDateTime, null);
+            
+            // Step 2: Get TargetProduct categorization
+            var categorizedProducts = await GetCategorizedProductsAsync();
+            var targetProductIds = categorizedProducts.AutomationProducts.Select(p => p.Id)
+                .Union(categorizedProducts.DogExtraProducts.Select(p => p.Id))
+                .ToHashSet();
+
+            // Step 3: Filter customers who have orders containing TargetProduct
+            var customersWithTargetProducts = recentOrders
+                .Where(order => order.LineItems.Any(item => item.ProductId.HasValue && targetProductIds.Contains(item.ProductId.Value)))
+                .Where(order => order.Customer != null)
+                .Select(order => order.Customer!.Id)
+                .Distinct()
+                .OrderBy(id => id)
+                .ToList();
+
+            _logger.LogInformation("Found {CustomerCount} customers with target products in orders from the last {LookupHours} hours", 
+                customersWithTargetProducts.Count, lookupHours);
+            
+            return customersWithTargetProducts;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving customers with target products from recent orders for last {LookupHours} hours", lookupHours);
+            throw;
+        }
     }
 }

@@ -3,9 +3,9 @@ using WhatsAppIntegration.Models;
 namespace WhatsAppIntegration.Services;
 
 /// <summary>
-/// Interface for Shopify API service operations
+/// Interface for low-level Shopify API server access operations
 /// </summary>
-public interface IShopifyService
+public interface IShopifyServerAccess
 {
     /// <summary>
     /// Get all customers with specific tags
@@ -73,23 +73,11 @@ public interface IShopifyService
     /// <param name="status">Order status filter (any, open, closed, cancelled)</param>
     /// <param name="limit">Maximum number of orders to retrieve (null for unlimited)</param>
     /// <param name="minOrdersPerCustomer">Minimum number of orders required per customer to be included</param>
-    /// <param name="productIds">List of product IDs - only include orders containing these products</param>
+    /// <param name="targetProductIds">List of product IDs to filter orders (only orders containing these products)</param>
     /// <param name="createdAtMin">Show orders created at or after date</param>
     /// <param name="createdAtMax">Show orders created at or before date</param>
-    /// <returns>Dictionary where key is customer ID and value is list of orders for that customer</returns>
-    Task<Dictionary<long, List<ShopifyOrder>>> GetOrdersByCustomerAsync(string status = "any", int? limit = null, int? minOrdersPerCustomer = null, List<long>? productIds = null, DateTime? createdAtMin = null, DateTime? createdAtMax = null);
-
-    /// <summary>
-    /// Get orders grouped by customer ID and categorized by product type (AutomationProducts and DogExtraProducts)
-    /// </summary>
-    /// <param name="status">Order status filter (any, open, closed, cancelled)</param>
-    /// <param name="limit">Maximum number of orders to retrieve (null for unlimited)</param>
-    /// <param name="minOrdersPerCustomer">Minimum number of orders required per customer to be included</param>
-    /// <param name="createdAtMin">Show orders created at or after date</param>
-    /// <param name="createdAtMax">Show orders created at or before date</param>
-    /// <param name="customerIds">Optional list of customer IDs to filter by (null for all customers)</param>
-    /// <returns>Dictionary where key is customer ID and value contains categorized orders (AutomationProducts and DogExtraProducts)</returns>
-    Task<ShopifyCategorizedOrdersByCustomerResponse> GetCategorizedOrdersByCustomerAsync(string status = "any", int? limit = null, int? minOrdersPerCustomer = null, DateTime? createdAtMin = null, DateTime? createdAtMax = null, List<long>? customerIds = null);
+    /// <returns>Dictionary where key is customer ID and value is list of orders</returns>
+    Task<Dictionary<long, List<ShopifyOrder>>> GetOrdersByCustomerAsync(string status = "any", int? limit = null, int? minOrdersPerCustomer = null, List<long>? targetProductIds = null, DateTime? createdAtMin = null, DateTime? createdAtMax = null);
 
     /// <summary>
     /// Get all products from the store
@@ -109,46 +97,45 @@ public interface IShopifyService
     Task<ShopifyProduct?> GetProductAsync(long productId);
 
     /// <summary>
-    /// Get all products categorized by tags (AutomationProducts, Products, DogExtraProducts)
+    /// Get the total count of products in the store
     /// </summary>
-    /// <returns>Categorized products response with counts</returns>
-    Task<ShopifyCategorizedProductsResponse> GetCategorizedProductsAsync();
+    /// <returns>Total number of products</returns>
+    Task<int> GetProductsCountAsync();
 
     /// <summary>
-    /// Get customer analytics including purchase predictions
-    /// </summary>
-    /// <param name="customerId">Customer ID</param>
-    /// <returns>Customer analytics data with next purchase predictions</returns>
-    Task<CustomerAnalytics?> GetCustomerAnalyticsAsync(long customerId);
-
-    /// <summary>
-    /// Get analytics for customers with specific tags
+    /// Get all products with specific tags
     /// </summary>
     /// <param name="tags">Comma-separated list of tags to filter by</param>
-    /// <param name="limit">Maximum number of customers to analyze (default: 100)</param>
-    /// <returns>List of customer analytics data</returns>
-    Task<List<CustomerAnalytics>> GetCustomerAnalyticsByTagsAsync(string tags, int limit = 100);
+    /// <param name="limit">Maximum number of products to retrieve (default: 250)</param>
+    /// <returns>List of products matching the specified tags</returns>
+    Task<List<ShopifyProduct>> GetProductsWithTagsAsync(string tags, int limit = 250);
 
     /// <summary>
-    /// Calculate next purchase date prediction for a customer based on their order history
+    /// Get all products with specific fields
     /// </summary>
-    /// <param name="orders">Customer's order history</param>
-    /// <returns>Predicted next purchase date, or null if not enough data</returns>
-    DateTime? CalculateNextPurchaseDate(List<ShopifyOrder> orders);
+    /// <param name="fields">Comma-separated list of fields to retrieve</param>
+    /// <param name="limit">Maximum number of products per request (default: 250)</param>
+    /// <param name="sinceId">Retrieve products created after this ID</param>
+    /// <returns>List of products with specified fields</returns>
+    Task<List<ShopifyProduct>> GetAllProductsWithFieldsAsync(string fields, int limit = 250, long? sinceId = null);
 
     /// <summary>
-    /// Get customers who are likely to purchase soon based on their order patterns
+    /// Fetch customers with pagination support
     /// </summary>
-    /// <param name="tags">Optional tags to filter customers</param>
-    /// <param name="daysThreshold">Number of days from now to consider "soon" (default: 7)</param>
-    /// <param name="limit">Maximum number of customers to analyze (default: 50)</param>
-    /// <returns>List of customers likely to purchase soon</returns>
-    Task<List<CustomerAnalytics>> GetCustomersLikelyToPurchaseSoonAsync(string? tags = null, int daysThreshold = 7, int limit = 50);
+    /// <param name="limit">Maximum number of customers per page</param>
+    /// <param name="pageInfo">Page info token for pagination</param>
+    /// <returns>Tuple of customers list and next page URL</returns>
+    Task<(List<ShopifyCustomer> customers, string? nextPageUrl)> FetchCustomersWithPaginationAsync(int limit, string? pageInfo = null);
 
     /// <summary>
-    /// Get customer IDs who have orders containing target products from the last X hours
+    /// Get all orders for a specific customer with additional filtering options
     /// </summary>
-    /// <param name="lookupHours">Number of hours to look back for orders</param>
-    /// <returns>List of customer IDs with target products from recent orders</returns>
-    Task<List<long>> GetCustomersWithTargetProductsFromRecentOrdersAsync(int lookupHours);
+    /// <param name="customerId">Customer ID</param>
+    /// <param name="status">Order status filter</param>
+    /// <param name="limit">Maximum number of orders</param>
+    /// <param name="sinceId">Retrieve orders created after this ID</param>
+    /// <param name="createdAtMin">Show orders created at or after date</param>
+    /// <param name="createdAtMax">Show orders created at or before date</param>
+    /// <returns>List of orders for the customer</returns>
+    Task<List<ShopifyOrder>> GetCustomerOrdersWithFiltersAsync(long customerId, string status, int? limit, long? sinceId, DateTime? createdAtMin, DateTime? createdAtMax);
 }

@@ -124,7 +124,7 @@ public class ShopifyIntegrationTests : IClassFixture<WebApplicationFactory<Progr
             new() { Id = 2, FinancialStatus = "pending", TotalPrice = "200.00" }
         };
 
-        mockShopifyService.Setup(x => x.GetAllOrdersAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>()))
+        mockShopifyService.Setup(x => x.GetAllOrdersAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<List<long>?>()))
             .ReturnsAsync(allOrders);
 
         // Setup products

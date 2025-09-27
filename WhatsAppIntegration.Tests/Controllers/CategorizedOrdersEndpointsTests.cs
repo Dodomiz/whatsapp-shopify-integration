@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 using WhatsAppIntegration.Controllers;
@@ -14,6 +15,7 @@ public class CategorizedOrdersEndpointsTests
     private readonly Mock<IShopifyService> _shopifyServiceMock;
     private readonly Mock<ICategorizedOrdersRepository> _repositoryMock;
     private readonly Mock<ILogger<ShopifyController>> _loggerMock;
+    private readonly Mock<IConfiguration> _configurationMock;
     private readonly ShopifyController _controller;
 
     public CategorizedOrdersEndpointsTests()
@@ -21,7 +23,9 @@ public class CategorizedOrdersEndpointsTests
         _shopifyServiceMock = new Mock<IShopifyService>();
         _repositoryMock = new Mock<ICategorizedOrdersRepository>();
         _loggerMock = new Mock<ILogger<ShopifyController>>();
-        _controller = new ShopifyController(_shopifyServiceMock.Object, _repositoryMock.Object, _loggerMock.Object);
+        _configurationMock = new Mock<IConfiguration>();
+        _configurationMock.Setup(c => c["OrderLookupHours"]).Returns("48");
+        _controller = new ShopifyController(_shopifyServiceMock.Object, _repositoryMock.Object, _loggerMock.Object, _configurationMock.Object);
     }
 
     [Fact]
@@ -35,7 +39,7 @@ public class CategorizedOrdersEndpointsTests
             AutomationProductsOrders = new List<ShopifyOrder> { new ShopifyOrder { Id = 1 } }
         };
 
-        _shopifyServiceMock.Setup(s => s.GetCategorizedOrdersByCustomerAsync("any", null, null, null, null))
+        _shopifyServiceMock.Setup(s => s.GetCategorizedOrdersByCustomerAsync("any", null, null, null, null, null))
             .ReturnsAsync(shopifyResponse);
 
         // Act - POST endpoint
@@ -101,7 +105,7 @@ public class CategorizedOrdersEndpointsTests
             DogExtraProducts = new List<ShopifyProduct> { new ShopifyProduct { Id = 2, Tags = "dogextra" } }
         };
 
-        _shopifyServiceMock.Setup(s => s.GetCategorizedOrdersByCustomerAsync("any", null, null, null, null))
+        _shopifyServiceMock.Setup(s => s.GetCategorizedOrdersByCustomerAsync("any", null, null, null, null, null))
             .ReturnsAsync(shopifyResponse);
         _shopifyServiceMock.Setup(s => s.GetCategorizedProductsAsync())
             .ReturnsAsync(categorizedProducts);

@@ -26,16 +26,23 @@ builder.Services.Configure<MongoDbConfig>(options =>
     options.CategorizedOrdersCollection = builder.Configuration["MongoDB__CategorizedOrdersCollection"] ?? "CategorizedOrders";
 });
 
+// Configure order lookup hours from environment variables
+builder.Services.Configure<OrderLookupConfig>(options =>
+{
+    options.LookupHours = int.TryParse(builder.Configuration["OrderLookupHours"], out var hours) ? hours : 48;
+});
+
 // Add HttpClient for WhatsApp service
 builder.Services.AddHttpClient<IWhatsAppService, WhatsAppService>();
 
-// Add HttpClient for Shopify service
-builder.Services.AddHttpClient<IShopifyService, ShopifyService>();
+// Add HttpClient for Shopify server access
+builder.Services.AddHttpClient<IShopifyServerAccess, ShopifyServerAccess>();
 
 // Register WhatsApp service
 builder.Services.AddScoped<IWhatsAppService, WhatsAppService>();
 
-// Register Shopify service
+// Register Shopify services
+builder.Services.AddScoped<IShopifyServerAccess, ShopifyServerAccess>();
 builder.Services.AddScoped<IShopifyService, ShopifyService>();
 
 // Register MongoDB repository

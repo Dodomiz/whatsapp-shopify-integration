@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 using WhatsAppIntegration.Controllers;
@@ -14,6 +15,7 @@ public class ShopifyControllerTests
     private readonly Mock<IShopifyService> _shopifyServiceMock;
     private readonly Mock<ICategorizedOrdersRepository> _repositoryMock;
     private readonly Mock<ILogger<ShopifyController>> _loggerMock;
+    private readonly Mock<IConfiguration> _configurationMock;
     private readonly ShopifyController _controller;
 
     public ShopifyControllerTests()
@@ -21,7 +23,9 @@ public class ShopifyControllerTests
         _shopifyServiceMock = new Mock<IShopifyService>();
         _repositoryMock = new Mock<ICategorizedOrdersRepository>();
         _loggerMock = new Mock<ILogger<ShopifyController>>();
-        _controller = new ShopifyController(_shopifyServiceMock.Object, _repositoryMock.Object, _loggerMock.Object);
+        _configurationMock = new Mock<IConfiguration>();
+        _configurationMock.Setup(c => c["OrderLookupHours"]).Returns("48");
+        _controller = new ShopifyController(_shopifyServiceMock.Object, _repositoryMock.Object, _loggerMock.Object, _configurationMock.Object);
     }
 
     #region Customer Tests
@@ -349,7 +353,7 @@ public class ShopifyControllerTests
             new() { Id = 1, FinancialStatus = "paid" }
         };
 
-        _shopifyServiceMock.Setup(s => s.GetAllOrdersAsync("open", 50, null, null, null))
+        _shopifyServiceMock.Setup(s => s.GetAllOrdersAsync("open", 50, null, null, null, null))
             .ReturnsAsync(orders);
 
         // Act
@@ -372,7 +376,7 @@ public class ShopifyControllerTests
             new() { Id = 2, FinancialStatus = "pending" }
         };
 
-        _shopifyServiceMock.Setup(s => s.GetAllOrdersAsync("any", null, null, null, null))
+        _shopifyServiceMock.Setup(s => s.GetAllOrdersAsync("any", null, null, null, null, null))
             .ReturnsAsync(orders);
 
         // Act
@@ -556,7 +560,7 @@ public class ShopifyControllerTests
             }
         };
 
-        _shopifyServiceMock.Setup(s => s.GetCategorizedOrdersByCustomerAsync("any", null, null, null, null))
+        _shopifyServiceMock.Setup(s => s.GetCategorizedOrdersByCustomerAsync("any", null, null, null, null, null))
             .ReturnsAsync(response);
 
         // Act
@@ -586,7 +590,7 @@ public class ShopifyControllerTests
     public async Task GetCategorizedOrdersByCustomer_WithServiceException_ShouldReturnInternalServerError()
     {
         // Arrange
-        _shopifyServiceMock.Setup(s => s.GetCategorizedOrdersByCustomerAsync(It.IsAny<string>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>()))
+        _shopifyServiceMock.Setup(s => s.GetCategorizedOrdersByCustomerAsync(It.IsAny<string>(), It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<List<long>?>()))
             .ThrowsAsync(new Exception("Service error"));
 
         // Act

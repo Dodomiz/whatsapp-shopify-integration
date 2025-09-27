@@ -19,6 +19,7 @@ public class ShopifyController : ControllerBase
     private readonly IShopifyService _shopifyService;
     private readonly ICategorizedOrdersRepository _categorizedOrdersRepository;
     private readonly ILogger<ShopifyController> _logger;
+    private readonly IConfiguration _configuration;
 
     /// <summary>
     /// Initializes a new instance of the ShopifyController
@@ -26,11 +27,13 @@ public class ShopifyController : ControllerBase
     /// <param name="shopifyService">Shopify service instance</param>
     /// <param name="categorizedOrdersRepository">Categorized orders repository instance</param>
     /// <param name="logger">Logger instance</param>
-    public ShopifyController(IShopifyService shopifyService, ICategorizedOrdersRepository categorizedOrdersRepository, ILogger<ShopifyController> logger)
+    /// <param name="configuration">Configuration instance</param>
+    public ShopifyController(IShopifyService shopifyService, ICategorizedOrdersRepository categorizedOrdersRepository, ILogger<ShopifyController> logger, IConfiguration configuration)
     {
         _shopifyService = shopifyService;
         _categorizedOrdersRepository = categorizedOrdersRepository;
         _logger = logger;
+        _configuration = configuration;
     }
 
     /// <summary>
@@ -88,7 +91,7 @@ public class ShopifyController : ControllerBase
         {
             return BadRequest("Limit must be greater than 0");
         }
-
+    
         try
         {
             var customers = await _shopifyService.GetAllCustomersAsync(limit);
@@ -127,7 +130,7 @@ public class ShopifyController : ControllerBase
                 _logger.LogWarning("Customer {CustomerId} not found", customerId);
                 return NotFound($"Customer with ID {customerId} not found");
             }
-
+    
             return Ok(customer);
         }
         catch (Exception ex)
@@ -159,7 +162,7 @@ public class ShopifyController : ControllerBase
             return StatusCode(500, "Internal server error while retrieving customers count");
         }
     }
-
+    
     /// <summary>
     /// Get all orders for a specific customer
     /// </summary>
@@ -185,13 +188,13 @@ public class ShopifyController : ControllerBase
         {
             return BadRequest("Limit must be between 1 and 250");
         }
-
+    
         var validStatuses = new[] { "any", "open", "closed", "cancelled" };
         if (!validStatuses.Contains(status.ToLower()))
         {
             return BadRequest($"Status must be one of: {string.Join(", ", validStatuses)}");
         }
-
+    
         try
         {
             var orders = await _shopifyService.GetCustomerOrdersAsync(customerId, status, limit, sinceId);
@@ -206,7 +209,7 @@ public class ShopifyController : ControllerBase
             return StatusCode(500, "Internal server error while retrieving customer orders");
         }
     }
-
+    
     /// <summary>
     /// Get all orders from the store
     /// </summary>
@@ -235,7 +238,7 @@ public class ShopifyController : ControllerBase
         {
             return BadRequest($"Status must be one of: {string.Join(", ", validStatuses)}");
         }
-
+    
         try
         {
             var orders = await _shopifyService.GetAllOrdersAsync(status, limit, sinceId, createdAtMin, createdAtMax);
@@ -250,7 +253,7 @@ public class ShopifyController : ControllerBase
             return StatusCode(500, "Internal server error while retrieving orders");
         }
     }
-
+    
     /// <summary>
     /// Get orders from the last N days
     /// </summary>
@@ -274,16 +277,16 @@ public class ShopifyController : ControllerBase
             {
                 return BadRequest("Days must be between 1 and 3650");
             }
-
+    
             var validStatuses = new[] { "any", "open", "closed", "cancelled" };
             if (!validStatuses.Contains(status.ToLower()))
             {
                 return BadRequest($"Status must be one of: {string.Join(", ", validStatuses)}");
             }
-
+    
             _logger.LogInformation("Getting orders from last {Days} days with status: {Status}, limit: {Limit}", 
                 days, status, limit);
-
+    
             var orders = await _shopifyService.GetOrdersFromLastDaysAsync(days, status, limit);
             
             return Ok(new ShopifyOrdersResponse { Orders = orders });
@@ -322,7 +325,7 @@ public class ShopifyController : ControllerBase
         {
             _logger.LogInformation("Getting orders grouped by customer with status: {Status}, limit: {Limit}, minOrdersPerCustomer: {MinOrders}, productIds: {ProductIds}", 
                 status, limit, minOrdersPerCustomer, productIds);
-
+    
             // Convert comma-separated productIds string to List<long>
             List<long>? productIdsList = null;
             if (!string.IsNullOrEmpty(productIds))
@@ -332,14 +335,14 @@ public class ShopifyController : ControllerBase
                     .Select(id => long.Parse(id.Trim()))
                     .ToList();
             }
-
+    
             var ordersByCustomer = await _shopifyService.GetOrdersByCustomerAsync(status, limit, minOrdersPerCustomer, productIdsList, createdAtMin, createdAtMax);
             
             var response = new ShopifyOrdersByCustomerResponse
             {
                 OrdersByCustomer = ordersByCustomer
             };
-
+    
             _logger.LogInformation("Successfully retrieved orders for {CustomerCount} customers with {TotalOrders} total orders", 
                 response.TotalCustomers, response.TotalOrders);
             
@@ -441,11 +444,13 @@ public class ShopifyController : ControllerBase
 
     /// <summary>
     /// Update existing customers and create new customers with categorized orders from Shopify
+    /// Fetches orders from the last X hours (from OrderLookupHours environment variable, default 48) 
+    /// and processes only customers who have orders containing TargetProduct
     /// </summary>
     /// <param name="status">Order status filter (any, open, closed, cancelled)</param>
     /// <param name="limit">Maximum number of orders to retrieve (null for unlimited)</param>
     /// <param name="minOrdersPerCustomer">Minimum number of orders required per customer to be included</param>
-    /// <param name="createdAtMin">Show orders created at or after date</param>
+    /// <param name="createdAtMin">Show orders created at or after date (ignored - automatically set to last X hours)</param>
     /// <param name="createdAtMax">Show orders created at or before date</param>
     /// <returns>Summary of processed customers with IDs and count (both updated and newly created)</returns>
     /// <response code="200">Categorized orders updated for existing customers and created for new customers</response>
@@ -464,8 +469,14 @@ public class ShopifyController : ControllerBase
     {
         try
         {
-            _logger.LogInformation("Processing categorized orders (updating existing and creating new customers) with status: {Status}, limit: {Limit}, minOrdersPerCustomer: {MinOrders}", 
-                status, limit, minOrdersPerCustomer);
+            // Get lookup hours from configuration
+            var lookupHours = int.TryParse(_configuration["OrderLookupHours"], out var hours) ? hours : 48;
+            
+            // Override createdAtMin to fetch only orders from the last X hours
+            var lookbackDateTime = DateTime.UtcNow.AddHours(-lookupHours);
+            
+            _logger.LogInformation("Processing categorized orders (updating existing and creating new customers) from last {LookupHours} hours with status: {Status}, limit: {Limit}, minOrdersPerCustomer: {MinOrders}", 
+                lookupHours, status, limit, minOrdersPerCustomer);
 
             // Validate status parameter
             var validStatuses = new[] { "any", "open", "closed", "cancelled" };
@@ -474,8 +485,56 @@ public class ShopifyController : ControllerBase
                 return BadRequest($"Invalid status. Must be one of: {string.Join(", ", validStatuses)}");
             }
 
-            // Get current data from Shopify
+            // Step 1: Fetch orders from the last X hours
+            var recentOrders = await _shopifyService.GetAllOrdersAsync(status, limit, null, lookbackDateTime, createdAtMax);
+            
+            // Step 2: Get TargetProduct categorization
+            var categorizedProducts = await _shopifyService.GetCategorizedProductsAsync();
+            var targetProductIds = categorizedProducts.AutomationProducts.Select(p => p.Id)
+                .Union(categorizedProducts.DogExtraProducts.Select(p => p.Id))
+                .ToHashSet();
+
+            // Step 3: Filter customers who have orders containing TargetProduct
+            var customersWithTargetProducts = recentOrders
+                .Where(order => order.LineItems.Any(item => item.ProductId.HasValue && targetProductIds.Contains(item.ProductId.Value)))
+                .Where(order => order.Customer != null)
+                .Select(order => order.Customer!.Id)
+                .Distinct()
+                .ToList();
+
+            if (!customersWithTargetProducts.Any())
+            {
+                _logger.LogInformation("No customers found with target products in orders from the last {LookupHours} hours", lookupHours);
+                return Ok(new CategorizedOrdersProcessedResponse
+                {
+                    ProcessedCustomerIds = new List<long>(),
+                    ProcessedCustomersCount = 0
+                });
+            }
+
+            _logger.LogInformation("Found {CustomerCount} customers with target products in orders from the last {LookupHours} hours", 
+                customersWithTargetProducts.Count, lookupHours);
+
+            // Step 4: Process these customers through GetCategorizedOrdersByCustomerAsync
             var shopifyResponse = await _shopifyService.GetCategorizedOrdersByCustomerAsync(status, limit, minOrdersPerCustomer, createdAtMin, createdAtMax);
+
+            // Step 5: Filter the response to only include customers found in the recent orders
+            var filteredOrdersByCustomer = shopifyResponse.OrdersByCustomer
+                .Where(kvp => customersWithTargetProducts.Contains(kvp.Key))
+                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+            if (!filteredOrdersByCustomer.Any())
+            {
+                _logger.LogInformation("No categorized orders found for customers with target products from the last {LookupHours} hours", lookupHours);
+                return Ok(new CategorizedOrdersProcessedResponse
+                {
+                    ProcessedCustomerIds = new List<long>(),
+                    ProcessedCustomersCount = 0
+                });
+            }
+
+            _logger.LogInformation("Processing {FilteredCustomerCount} customers with target products out of {TotalCustomerCount} total customers", 
+                filteredOrdersByCustomer.Count, shopifyResponse.OrdersByCustomer.Count);
 
             // Get existing customer IDs from database
             var existingDocuments = await _categorizedOrdersRepository.GetAllCategorizedOrdersAsync();
@@ -483,15 +542,14 @@ public class ShopifyController : ControllerBase
 
             var processedCustomerIds = new List<long>();
 
-            // Process all customers from Shopify response (update existing, create new)
-            foreach (var (customerId, categorizedOrders) in shopifyResponse.OrdersByCustomer)
+            // Process only the filtered customers (update existing, create new)
+            foreach (var (customerId, categorizedOrders) in filteredOrdersByCustomer)
             {
                     // Calculate next purchase predictions for this customer
                     NextPurchasePrediction? automationPrediction = null;
                     NextPurchasePrediction? dogExtraPrediction = null;
                     
-                    // Get product categories for predictions (simplified - would need access to product data)
-                    var categorizedProducts = await _shopifyService.GetCategorizedProductsAsync();
+                    // Use the already loaded categorized products
                     var automationProductIds = categorizedProducts.AutomationProducts.Select(p => p.Id).ToHashSet();
                     var dogExtraProductIds = categorizedProducts.DogExtraProducts.Select(p => p.Id).ToHashSet();
                     
@@ -615,7 +673,7 @@ public class ShopifyController : ControllerBase
         {
             return BadRequest("Limit must be between 1 and 250");
         }
-
+    
         try
         {
             var products = await _shopifyService.GetAllProductsAsync(limit, sinceId, vendor, productType);
@@ -630,7 +688,7 @@ public class ShopifyController : ControllerBase
             return StatusCode(500, "Internal server error while retrieving products");
         }
     }
-
+    
     /// <summary>
     /// Get a specific product by ID
     /// </summary>
@@ -654,7 +712,7 @@ public class ShopifyController : ControllerBase
                 _logger.LogWarning("Product {ProductId} not found", productId);
                 return NotFound($"Product with ID {productId} not found");
             }
-
+    
             return Ok(product);
         }
         catch (Exception ex)
@@ -714,7 +772,7 @@ public class ShopifyController : ControllerBase
                 _logger.LogWarning("Customer analytics for {CustomerId} not found", customerId);
                 return NotFound($"Customer with ID {customerId} not found");
             }
-
+    
             return Ok(analytics);
         }
         catch (Exception ex)
@@ -723,7 +781,34 @@ public class ShopifyController : ControllerBase
             return StatusCode(500, "Internal server error while retrieving customer analytics");
         }
     }
-
+    
+    /// <summary>
+    /// Get customer IDs who have orders containing target products from the last X hours
+    /// </summary>
+    /// <returns>List of customer IDs with target products from recent orders</returns>
+    /// <response code="200">Customer IDs retrieved successfully</response>
+    /// <response code="500">Internal server error</response>
+    [HttpGet("customers/with-target-products/recent")]
+    [ProducesResponseType(typeof(List<long>), 200)]
+    [ProducesResponseType(500)]
+    public async Task<IActionResult> GetCustomersWithTargetProductsFromRecentOrders()
+    {
+        try
+        {
+            // Get lookup hours from configuration
+            var lookupHours = int.TryParse(_configuration["OrderLookupHours"], out var hours) ? hours : 48;
+            
+            var customersWithTargetProducts = await _shopifyService.GetCustomersWithTargetProductsFromRecentOrdersAsync(lookupHours);
+            
+            return Ok(customersWithTargetProducts);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving customers with target products from recent orders");
+            return StatusCode(500, "Internal server error while retrieving customers with target products");
+        }
+    }
+    
     /// <summary>
     /// Get analytics for customers with specific tags
     /// </summary>
@@ -745,12 +830,12 @@ public class ShopifyController : ControllerBase
         {
             return BadRequest("Tags parameter is required");
         }
-
+    
         if (limit <= 0 || limit > 100)
         {
             return BadRequest("Limit must be between 1 and 100");
         }
-
+    
         try
         {
             var analytics = await _shopifyService.GetCustomerAnalyticsByTagsAsync(tags, limit);
@@ -765,7 +850,7 @@ public class ShopifyController : ControllerBase
             return StatusCode(500, "Internal server error while retrieving customer analytics");
         }
     }
-
+    
     /// <summary>
     /// Calculate next purchase date prediction for a specific customer
     /// </summary>
@@ -788,14 +873,14 @@ public class ShopifyController : ControllerBase
             {
                 return NotFound("Customer not found or insufficient order history for prediction (minimum 2 orders required)");
             }
-
+    
             var nextPurchaseDate = _shopifyService.CalculateNextPurchaseDate(orders);
             
             if (!nextPurchaseDate.HasValue)
             {
                 return NotFound("Unable to calculate next purchase date with available data");
             }
-
+    
             var response = new NextPurchasePredictionResponse
             {
                 CustomerId = customerId,
@@ -805,7 +890,7 @@ public class ShopifyController : ControllerBase
                 DaysSinceLastOrder = (DateTime.Now - orders.Max(o => o.CreatedAt)).Days,
                 Confidence = CalculatePredictionConfidence(orders)
             };
-
+    
             return Ok(response);
         }
         catch (Exception ex)
@@ -814,7 +899,7 @@ public class ShopifyController : ControllerBase
             return StatusCode(500, "Internal server error while calculating purchase prediction");
         }
     }
-
+    
     /// <summary>
     /// Get customers who are likely to purchase soon
     /// </summary>
@@ -838,12 +923,12 @@ public class ShopifyController : ControllerBase
         {
             return BadRequest("Days threshold must be between 1 and 365");
         }
-
+    
         if (limit <= 0 || limit > 50)
         {
             return BadRequest("Limit must be between 1 and 50");
         }
-
+    
         try
         {
             var customers = await _shopifyService.GetCustomersLikelyToPurchaseSoonAsync(tags, daysThreshold, limit);

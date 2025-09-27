@@ -19,7 +19,8 @@
         "Shopify__ApiVersion": "2024-01",
         "MongoDB__ConnectionString": "mongodb://localhost:27017",
         "MongoDB__DatabaseName": "WhatsAppIntegration",
-        "MongoDB__CategorizedOrdersCollection": "CategorizedOrders"
+        "MongoDB__CategorizedOrdersCollection": "CategorizedOrders",
+        "OrderLookupHours": "48"
       }
     },
     "https": {
@@ -40,7 +41,8 @@
         "Shopify__ApiVersion": "2024-01",
         "MongoDB__ConnectionString": "mongodb://localhost:27017",
         "MongoDB__DatabaseName": "WhatsAppIntegration",
-        "MongoDB__CategorizedOrdersCollection": "CategorizedOrders"
+        "MongoDB__CategorizedOrdersCollection": "CategorizedOrders",
+        "OrderLookupHours": "48"
       }
     }
   }
