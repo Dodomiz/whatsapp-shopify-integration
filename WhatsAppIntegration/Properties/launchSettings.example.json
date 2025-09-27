@@ -1,4 +1,4 @@
-﻿{
+{
   "$schema": "https://json.schemastore.org/launchsettings.json",
   "profiles": {
     "http": {
@@ -37,7 +37,7 @@
         "WhatsApp__ApiVersion": "v18.0",
         "Shopify__ShopDomain": "your_shop_domain_here",
         "Shopify__AccessToken": "your_shopify_access_token_here",
-        "Shopify__ApiVersion": "2023-10",
+        "Shopify__ApiVersion": "2024-01",
         "MongoDB__ConnectionString": "mongodb://localhost:27017",
         "MongoDB__DatabaseName": "WhatsAppIntegration",
         "MongoDB__CategorizedOrdersCollection": "CategorizedOrders"

@@ -293,12 +293,40 @@
 					}
 				},
 				{
-					"name": "Get Categorized Orders Grouped by Customer",
+					"name": "Get Categorized Orders from Database",
 					"request": {
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/shopify/orders/by-customer/categorized?status=any&limit=null&minOrdersPerCustomer=2&createdAtMin=2024-01-01T00:00:00Z&createdAtMax=2024-12-31T23:59:59Z",
+							"raw": "{{base_url}}/api/shopify/orders/by-customer/categorized?limit=50",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"shopify",
+								"orders",
+								"by-customer",
+								"categorized"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "50",
+									"description": "Maximum number of customers to retrieve (null for unlimited)"
+								}
+							]
+						},
+						"description": "Get categorized orders by customer from database with next purchase predictions. Returns complete data including automation and dogExtra predictions with product details and confidence levels."
+					}
+				},
+				{
+					"name": "Process Categorized Orders (Save to Database)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/shopify/orders/by-customer/categorized?status=any&limit=1000&minOrdersPerCustomer=2&createdAtMin=2024-01-01T00:00:00Z&createdAtMax=2024-12-31T23:59:59Z",
 							"host": [
 								"{{base_url}}"
 							],
@@ -317,7 +345,7 @@
 								},
 								{
 									"key": "limit",
-									"value": "null",
+									"value": "1000",
 									"description": "Maximum number of orders to retrieve (null for unlimited)"
 								},
 								{
@@ -337,7 +365,55 @@
 								}
 							]
 						},
-						"description": "Get orders grouped by customer ID and categorized by product type (AutomationProducts and DogExtraProducts). Only returns orders containing products with 'includeAutomation' or 'dogExtra1' tags, separated into respective categories per customer."
+						"description": "Process and save categorized orders by customer to database. Fetches data from Shopify, calculates next purchase predictions, and saves to MongoDB. Returns summary with processed customer IDs and count."
+					}
+				},
+				{
+					"name": "Update/Create Categorized Orders",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/shopify/orders/by-customer/categorized?status=any&limit=500&minOrdersPerCustomer=1&createdAtMin={{$isoTimestamp}}&createdAtMax={{$isoTimestamp}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"shopify",
+								"orders",
+								"by-customer",
+								"categorized"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "any",
+									"description": "Order status filter (any, open, closed, cancelled)"
+								},
+								{
+									"key": "limit",
+									"value": "500",
+									"description": "Maximum number of orders to retrieve (null for unlimited)"
+								},
+								{
+									"key": "minOrdersPerCustomer",
+									"value": "1",
+									"description": "Minimum number of orders required per customer to be included"
+								},
+								{
+									"key": "createdAtMin",
+									"value": "{{$isoTimestamp}}",
+									"description": "Show orders created at or after date (use dynamic timestamp for recent data)"
+								},
+								{
+									"key": "createdAtMax",
+									"value": "{{$isoTimestamp}}",
+									"description": "Show orders created at or before date (use current timestamp)"
+								}
+							]
+						},
+						"description": "Update existing customers and create new customers with categorized orders from Shopify. Synchronizes database with current Shopify state - updates existing customers with fresh data and creates new customers. Returns summary of both updated and newly created customers."
 					}
 				}
 			],

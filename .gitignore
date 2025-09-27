@@ -441,6 +441,10 @@ appsettings.*.json
 !appsettings.json
 !appsettings.Development.json
 
+# Launch settings with sensitive data
+launchSettings.json
+!launchSettings.example.json
+
 # SSL certificates
 *.pfx
 *.p12
