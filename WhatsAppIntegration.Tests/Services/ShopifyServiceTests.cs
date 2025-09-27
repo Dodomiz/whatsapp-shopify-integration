@@ -32,7 +32,7 @@ public class ShopifyServiceTests
         };
         
         _configMock.Setup(x => x.Value).Returns(_config);
-        _service = new ShopifyService(_configMock.Object, _loggerMock.Object, _repositoryMock.Object, _shopifyServerAccessMock.Object);
+        _service = new ShopifyService(_loggerMock.Object, _repositoryMock.Object, _shopifyServerAccessMock.Object);
     }
 
     [Fact]
